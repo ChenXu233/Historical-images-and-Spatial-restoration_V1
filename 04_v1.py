@@ -1,578 +1,222 @@
-# -*- coding: utf-8 -*-
-
 import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-from matplotlib import font_manager
-from mpl_toolkits.mplot3d import Axes3D
-import csv
-import glob
-import math
-import logging
+import plotly.graph_objects as go
+import rasterio
 from pyproj import Transformer
-from scipy.spatial import distance
-import seaborn as sns
-from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import Delaunay
-from osgeo import gdal
-import json
-import geopandas as gpd
-from shapely.geometry import Polygon
-import os
-import re
-import random
-
-# 设置字体
-plt.rcParams['font.sans-serif'] = ['SimHei']  # 使用黑体
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
-
-# 验证字体是否存在
-font_path = font_manager.findSystemFonts(fontpaths=None, fontext='ttf')
-
-# 设置日志记录
-logging.basicConfig(level=logging.DEBUG, filename='debug.log', filemode='w', format='%(asctime)s - %(levelname)s - %(message)s')
-
-# 坐标系统统一化
-class GeoCoordTransformer:
-    def __init__(self):
-        self.to_utm = Transformer.from_crs("epsg:4326", "epsg:32650", always_xy=True)
-        self.to_wgs84 = Transformer.from_crs("epsg:32650", "epsg:4326", always_xy=True)
-
-    def wgs84_to_utm(self, lon, lat):  # 注意顺序：先经度，后纬度
-        try:
-            easting, northing = self.to_utm.transform(lon, lat)
-            if np.isinf(easting) or np.isinf(northing):
-                raise ValueError('Invalid UTM coordinates')
-            return easting, northing
-        except Exception as e:
-            raise
-
-    def utm_to_wgs84(self, easting, northing):
-        try:
-            lon, lat = self.to_wgs84.transform(easting, northing)  # 注意顺序：先经度，后纬度
-            if np.isinf(lat) or np.isinf(lon):
-                raise ValueError('Invalid WGS84 coordinates')
-            return lon, lat
-        except Exception as e:
-            raise
-
-geo_transformer = GeoCoordTransformer()
-
-# **********
-# Calculate true and pixel distances between features
-# **********
-def correlate_features(features, depth_val):
-    result = ['id', 'sym_s', 'x_s', 'y_s', 'pixel_x_s', 'pixel_y_s', 'calc_pixel_x_s', 'calc_pixel_y_s',
-              'sym_t', 'x_t', 'y_t', 'pixel_x_t', 'pixel_y_t', 'calc_pixel_x_t', 'calc_pixel_y_t',
-              'dis_m_x', 'dis_m_y', 'dis_m', 'dis_pix_x', 'dis_pix_y', 'dis_pix', 'dis_c_pix_x', 'dis_c_pix_y',
-              'dis_c_pix', 'bear_pix', 'dis_depth_pix', 'bear_c_pix', 'dis_depth_c_pix']
-
-    results = []
-    results.append(result)
-    count = 1
-    i = 0
-    j = 0
-    features.remove(features[0])  # remove the headers
-    features.sort()  # sort alphabethically
-    for f1 in features:
-        i = j
-        while i < len(features):
-            if f1[1] != features[i][1]:
-                dis_m_x = int(features[i][3]) - int(f1[3])
-                dis_m_y = int(features[i][4]) - int(f1[4])
-                dis_m = math.sqrt(math.pow(dis_m_x, 2) + math.pow(dis_m_y, 2))
-
-                if f1[5] != 0 and features[i][5] != 0:
-                    dis_pix_x = int(features[i][5]) - int(f1[5])
-                    dis_pix_y = int(features[i][6]) - int(f1[6])
-                else:
-                    dis_pix_x = 0
-                    dis_pix_y = 0
-                dis_pix = math.sqrt(math.pow(dis_pix_x, 2) + math.pow(dis_pix_y, 2))
-
-                if features[i][7] != 0 and f1[7] != 0:
-                    dis_c_pix_x = int(features[i][7]) - int(f1[7])
-                    dis_c_pix_y = int(features[i][8]) - int(f1[8])
-                else:
-                    dis_c_pix_x = 0
-                    dis_c_pix_y = 0
-                dis_c_pix = math.sqrt(math.pow(dis_c_pix_x, 2) + math.pow(dis_c_pix_y, 2))
-
-                bear_pix = calc_bearing(f1[5], f1[6], features[i][5], features[i][6])
-                if bear_pix != 0 and bear_pix <= 180:
-                    dis_depth_pix = (abs(bear_pix - 90) / 90 + depth_val) * dis_pix
-                elif bear_pix != 0 and bear_pix > 180:
-                    dis_depth_pix = (abs(bear_pix - 270) / 90 + depth_val) * dis_pix
-                else:
-                    dis_depth_pix = 0
-
-                bear_c_pix = calc_bearing(f1[7], f1[8], features[i][7], features[i][8])
-                if bear_c_pix != 0 and bear_c_pix <= 180:
-                    dis_depth_c_pix = (abs(bear_c_pix - 90) / 90 + depth_val) * dis_c_pix
-                elif bear_c_pix != 0 and bear_c_pix > 180:
-                    dis_depth_c_pix = (abs(bear_c_pix - 270) / 90 + depth_val) * dis_c_pix
-                else:
-                    dis_depth_c_pix = 0
-
-                result = [str(count), f1[1], f1[3], f1[4], f1[5], f1[6], f1[7], f1[8], features[i][1], features[i][3],
-                          features[i][4], features[i][5], features[i][6], features[i][7], features[i][8],
-                          dis_m_x, dis_m_y, dis_m, dis_pix_x, dis_pix_y, dis_pix, dis_c_pix_x, dis_c_pix_y, dis_c_pix,
-                          bear_pix, dis_depth_pix, bear_c_pix, dis_depth_c_pix]
-
-                results.append(result)
-                count += 1
-            i += 1
-        j += 1
-    return results
+from shapely.geometry import Polygon, Point
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
-# **********
-# Calculation of the bearing from point 1 to point 2
-# **********
-def calc_bearing(x1, y1, x2, y2):
-    if x1 == 0 or x2 == 0 or y1 == 0 or y2 == 0:
-        degrees_final = 0
-    else:
-        deltaX = x2 - x1
-        deltaY = y2 - y1
+def read_dem(file_path):
+    with rasterio.open(file_path) as dataset:
+        dem_data = dataset.read(1)
+        transform = dataset.transform
+        x_min = transform[2]
+        y_min = transform[5]
+        cell_size = abs(transform[0])
+        print(f"DEM分辨率: {cell_size:.8f} 度/像素")
+        print(f"DEM数据范围: 经度 [{x_min:.6f} -> {x_min + cell_size * dem_data.shape[1]:.6f}]")
+        print(f"          纬度 [{y_min:.6f} -> {y_min - cell_size * dem_data.shape[0]:.6f}]")
+    return dem_data, x_min, y_min, cell_size
 
-        degrees_temp = math.atan2(deltaX, deltaY) / math.pi * 180
+def get_elevation_points_within_polygon(dem_data, polygon, x_min, y_min, cell_size):
+    elevations = []
+    latitudes = []
+    longitudes = []
 
-        if degrees_temp < 0:
-            degrees_final = 360 + degrees_temp
-        else:
-            degrees_final = degrees_temp
+    # 确保多边形是有效的
+    if not polygon.is_valid:
+        polygon = polygon.buffer(0)
 
-        if degrees_final < 180:
-            degrees_final = 180 - degrees_final
-        else:
-            degrees_final = 360 + 180 - degrees_final
+    # 遍历每个像素中心点
+    for row in range(dem_data.shape[0]):
+        for col in range(dem_data.shape[1]):
+            lon = x_min + (col + 0.5) * cell_size  # 像素中心点经度
+            lat = y_min - (row + 0.5) * cell_size  # 像素中心点纬度
+            point = Point(lon, lat)
+            if polygon.contains(point):
+                elevations.append(dem_data[row, col])
+                latitudes.append(lat)
+                longitudes.append(lon)
 
-    return degrees_final
+    return longitudes, latitudes, elevations
 
-# **********
-# Find homographies function
-# **********
-def find_homographies(recs, camera_locations, im, show, ransacbound, output):
-    pixels = []
-    pos3ds = []
-    symbols = []
-    for r in recs:
-        pixels.append(r['pixel'])
-        pos3ds.append(r['pos3d'])
-        symbols.append(r['symbol'])
-    pixels = np.array(pixels)
-    pos3ds = np.array(pos3ds)
-    symbols = np.array(symbols)
-    loc3ds = []
-    grids = []
-    for cl in camera_locations:
-        grids.append(cl['grid_code'])
-        loc3ds.append(cl['pos3d'])
-    grids = np.array(grids)
-    loc3ds = np.array(loc3ds)
-    num_matches = np.zeros((loc3ds.shape[0], 2))
-    scores = []
-    for i in range(0, grids.shape[0], 1):  # 50
-        grid_code_min = 0
-        if grids[i] >= grid_code_min:
-            if show:
-                print(i, grids[i], loc3ds[i])
-            M, num_matches[i, 0], num_matches[i, 1] = find_homography(recs, pixels, pos3ds, symbols, loc3ds[i], im, show,
-                                                                   ransacbound, output)
-        else:
-            num_matches[i, :] = 0
-        score = [i + 1, num_matches[i, 0], num_matches[i, 1], grids[i], loc3ds[i][0], loc3ds[i][1], loc3ds[i][2]]
-        scores.append(score)
+def convert_utm_to_wgs84(utm_coordinates, zone_number):
+    transformer = Transformer.from_crs(f"epsg:326{zone_number}", "epsg:4326", always_xy=True)  # 关键: always_xy=True
+    return [(lon, lat, elev) for easting, northing, elev in utm_coordinates
+            for lon, lat in [transformer.transform(easting, northing)]]
 
-    if show is False:
-        outputCsv = output.replace(".jpg", "_location.csv")
-        csvFile = open(outputCsv, 'w', newline='', encoding='utf-8')
-        csvWriter = csv.writer(csvFile)
-        csvWriter.writerow(['location_id', 'min_score', 'max_score', 'grid_code', 'Z', 'X', 'Y'])
-        for s in scores:
-            csvWriter.writerow(s)
+def convert_wgs84_to_utm(wgs84_coordinates, zone_number):
+    transformer = Transformer.from_crs("epsg:4326", f"epsg:326{zone_number}", always_xy=True)
+    return [(easting, northing, elev) for lon, lat, elev in wgs84_coordinates
+            for easting, northing in [transformer.transform(lon, lat)]]
 
-    return num_matches
 
-# **********
-# Find homography function
-# **********
-def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ransacbound, outputfile):
-    pixels = np.array(pixels)
-    pos2 = np.zeros((len(pixels), 2))
-    good = np.zeros(len(pixels))
-    for i in range(len(pixels)):
-        good[i] = pixels[i][0] != 0 or pixels[i][1] != 0
-        p = pos3ds[i, :] - camera_location
-        p = np.array([p[2], p[1], p[0]])
-        p = p / p[2]
-        pos2[i, :] = p[0:2]
-    M, mask = cv2.findHomography(pos2[good == 1], np.array(pixels)[good == 1], cv2.RANSAC, ransacbound)
+def create_precise_polygon(wgs84_coords):
+    """直接使用有序的原始点创建凹多边形，显式闭合路径"""
+    # 提取经纬度
+    coords = [(lon, lat) for lon, lat, _ in wgs84_coords]
 
-    M = np.linalg.inv(M)
-    logging.debug(f'Homography Matrix M: {M}')
-    logging.debug(f'Mask: {mask}')
-    if show:
-        print('M', M, np.sum(mask))
-    if show:
-        plt.figure(figsize=(40, 20))
-        plt.imshow(im)
-        for rec in recs:
-            symbol = rec['symbol']
-            pixel = rec['pixel']
-            if pixel[0] != 0 or pixel[1] != 0:
-                plt.text(pixel[0], pixel[1], symbol, color='purple', fontsize=6, weight='bold')
-    err1 = 0
-    err2 = 0
-    feature = ['id', 'symbol', 'name', 'x', 'y', 'pixel_x', 'pixel_y', 'calc_pixel_x', 'calc_pixel_y']
-    features = []
-    features.append(feature)
-    for i in range(pos2[good == 1].shape[0]):
-        p1 = np.array(pixels)[good == 1][i, :]
-        pp = np.array([pos2[good == 1][i, 0], pos2[good == 1][i, 1], 1.0])
-        pp2 = np.matmul(np.linalg.inv(M), pp)
-        pp2 = pp2 / pp2[2]
-        P1 = np.array([p1[0], p1[1], 1.0])
-        PP2 = np.matmul(M, P1)
-        PP2 = PP2 / PP2[2]
-        P2 = pos2[good == 1][i, :]
-        logging.debug(f'Feature {i}: mask={mask[i]}, p1={p1}, pp2={pp2[0:2]}, distance={np.linalg.norm(p1 - pp2[0:2])}')
-        if show and good[i]:
-            print(i)
-            print(mask[i] == 1, p1, pp2[0:2], np.linalg.norm(p1 - pp2[0:2]))
-            print(mask[i] == 1, P2, PP2[0:2], np.linalg.norm(P2 - PP2[0:2]))
-        if mask[i] == 1:
-            err1 += np.linalg.norm(p1 - pp2[0:2])
-            err2 += np.linalg.norm(P2 - PP2[0:2])
-        if show:
-            color = 'green' if mask[i] == 1 else 'red'
-            plt.plot([p1[0], pp2[0]], [p1[1], pp2[1]], color=color, linewidth=2)
-            plt.plot(p1[0], p1[1], marker='X', color=color, markersize=3)
-            plt.plot(pp2[0], pp2[1], marker='o', color=color, markersize=3)
-            sym = ''
-            name = ''
-            for r in recs:
-                px = r['pixel'].tolist()
-                if px[0] == p1[0] and px[1] == p1[1]:
-                    sym = r['symbol']
-                    name = r['name']
-                    x = r['pos3d'][0]
-                    y = r['pos3d'][1]
-                    break
-            feature = [i, sym, name, x, y, p1[0], p1[1], pp2[0], pp2[1]]
-            features.append(feature)
+    # 显式闭合路径（若首尾点不同）
+    if coords and (coords[0] != coords[-1]):
+        coords.append(coords[0])
 
-    i = -1
-    for r in recs:  # Extracting features that were not noted on the image (pixel_x and pixel_y are 0)
-        i += 1
-        p1 = pixels[i, :]
-        if p1[0] == 0 and p1[1] == 0:
-            pp = np.array([pos2[i, 0], pos2[i, 1], 1.0])
-            pp2 = np.matmul(np.linalg.inv(M), pp)
-            pp2 = pp2 / pp2[2]
-            logging.debug(f'Unnoted Feature {i}: symbol={r["symbol"]}, pp2={pp2[0:2]}')
-            if show:
-                plt.text(pp2[0], pp2[1], r['symbol'], color='black', fontsize=6, style='italic',
-                         weight='bold')
-                plt.plot(pp2[0], pp2[1], marker='s', markersize=3, color='black')
-                x = r['pos3d'][0]
-                y = r['pos3d'][1]
-                feature = [i, recs[i]['symbol'], recs[i]['name'], x, y, 0, 0, pp2[0], pp2[1]]
-                features.append(feature)
-    if show:
-        outputCsv = outputfile.replace(".jpg", "_accuracies.csv")
-        with open(outputCsv, 'w', newline='', encoding='utf-8-sig') as csvFile:
-            csvWriter = csv.writer(csvFile)
-            for f in features:
-                csvWriter.writerow(f)
+    # 创建多边形（假设coords已按实际轮廓顺序排列）
+    polygon = Polygon(coords)
 
-        # 发送特征到相关函数
-        results = correlate_features(features, 1)
-        outputCsv = outputfile.replace(".jpg", "_correlations.csv")
-        with open(outputCsv, 'w', newline='', encoding='utf-8') as csvFile:
-            csvWriter = csv.writer(csvFile)
-            for r in results:
-                csvWriter.writerow(r)
+    # 验证边界偏差
+    original = np.array(coords[:-1])  # 排除闭合点
+    processed = np.array(polygon.exterior.coords)[:-1]
+    if original.shape[0] != processed.shape[0]:
+        print("警告：坐标数量不一致，可能因输入点无序导致简化")
+    deviation = np.max(np.abs(original - processed))
+    print(f"边界保真度检查: 最大偏差 {deviation:.10f} 度")
 
-        print('Output image file: ', outputfile)
-        plt.savefig(outputfile.replace(".jpg", "_output.png"), dpi=300)
-        plt.show()
+    return polygon
 
-    err2 += np.sum(1 - mask) * ransacbound
-    if show:
-        print('err', err1, err1 / np.sum(mask), err2, err2 / np.sum(mask))
-    return M, err1, err2
-
-# 加载DEM数据
-def load_dem_data(dem_file):
-    dem_dataset = gdal.Open(dem_file)
-    if dem_dataset is None:
-        raise RuntimeError(f"无法加载 DEM 文件: {dem_file}")
-
-    dem_array = dem_dataset.ReadAsArray()
-    gt = dem_dataset.GetGeoTransform()
-    dem_x = np.arange(dem_array.shape[1]) * gt[1] + gt[0]
-    dem_y = np.arange(dem_array.shape[0]) * gt[5] + gt[3]
-
-    # 新增部分：计算 DEM 四角点在 UTM 下的坐标范围
-    corners = [
-        (dem_x.min(), dem_y.min()),
-        (dem_x.min(), dem_y.max()),
-        (dem_x.max(), dem_y.min()),
-        (dem_x.max(), dem_y.max())
-    ]
-    utm_x_list = []
-    utm_y_list = []
-    for lon, lat in corners:
-        try:
-            easting, northing = geo_transformer.wgs84_to_utm(lon, lat)
-            utm_x_list.append(easting)
-            utm_y_list.append(northing)
-        except Exception as e:
-            logging.error(f"转换 DEM 坐标 {lon},{lat} 到 UTM 时出错: {e}")
-    dem_utm_x_range = (min(utm_x_list), max(utm_x_list)) if utm_x_list else (None, None)
-    dem_utm_y_range = (min(utm_y_list), max(utm_y_list)) if utm_y_list else (None, None)
-
-    dem_interpolator = RegularGridInterpolator((dem_y, dem_x), dem_array)
-    dem_data = {
-        'interpolator': dem_interpolator,
-        'x_range': (dem_x.min(), dem_x.max()),
-        'y_range': (dem_y.min(), dem_y.max()),
-        'utm_x_range': dem_utm_x_range,
-        'utm_y_range': dem_utm_y_range,
-        'data': dem_array
-    }
-    logging.debug(f"DEM 范围: 经度 {dem_data['x_range']}, 纬度 {dem_data['y_range']}")
-    logging.debug(f"DEM UTM 范围: 东距 {dem_data['utm_x_range']}, 北距 {dem_data['utm_y_range']}")
-    return dem_data
-
-# 获取DEM数据中的海拔值
-def get_dem_elevation(dem_data, coord, coord_type='utm'):
+def remove_unnecessary_faces(triangles, points):
     """
-    根据坐标类型获取 DEM 高程。
-    :param dem_data: DEM 数据
-    :param coord: 坐标 (easting, northing) 或 (lon, lat)
-    :param coord_type: 坐标类型，'utm' 或 'wgs84'
-    :return: 海拔高度
+    删除不必要的立面，即法向量接近垂直的三角面
     """
-    if coord_type == 'utm':
-        lon, lat = geo_transformer.utm_to_wgs84(coord[0], coord[1])
-    elif coord_type == 'wgs84':
-        lon, lat = coord
-    else:
-        raise ValueError("Invalid coord_type. Must be 'utm' or 'wgs84'.")
+    valid_triangles = []
+    for tri in triangles:
+        p1, p2, p3 = points[tri[0]], points[tri[1]], points[tri[2]]
+        v1 = np.array(p2) - np.array(p1)
+        v2 = np.array(p3) - np.array(p1)
+        normal = np.cross(v1, v2)
+        normal = normal / np.linalg.norm(normal)
+        # 判断法向量是否接近垂直
+        if abs(normal[2]) > 0.1:  # 0.1 是一个经验阈值，可以调整
+            valid_triangles.append(tri)
+    return np.array(valid_triangles)
 
-    # 插值器构造时使用的坐标顺序为 (lat, lon)
-    dem_elev = dem_data['interpolator']((lat, lon))
-    return dem_elev
-
-# **********
-# read data from the features file
-# **********
-def read_points_data(filename, pixel_x, pixel_y, scale, dem_data):
-    updated_rows = []
-    with open(filename, encoding='utf-8') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        line_count = 0
-        recs = []
-        pixels = []
-        for row in csv_reader:
-            if line_count == 0:
-                updated_rows.append(row)  # 保留标题行
-                line_count += 1
-                names = row
-                indx = names.index(pixel_x)
-                indy = names.index(pixel_y)
-            else:
-                symbol = row[1]
-                name = row[2]
-                pixel = np.array([int(row[indx]), int(row[indy])]) / scale
-                longitude = float(row[4])
-                latitude = float(row[5])
-                elevation = get_dem_elevation(dem_data, (longitude, latitude), coord_type='wgs84')
-                row[6] = str(elevation) # 更新Elevation列
-                updated_rows.append(row)  # 保存更新后的行
-                # 跳过当前处理照片中像素坐标为0,0的点
-                if int(row[indx]) == 0 and int(row[indy]) == 0:
-                    continue
-                pixels.append(pixel)
-                # 添加坐标转换
-                try:
-                    logging.debug(f'Processing row {line_count}: lat={latitude}, lon={longitude}')
-                    easting, northing = geo_transformer.wgs84_to_utm(longitude, latitude)  # 注意顺序
-                    pos3d = np.array([easting, northing, elevation])
-                    print(f"Processed Point - Symbol: {symbol}, Name: {name}, Pixel: {pixel}, Lon: {longitude}, Lat: {latitude}, Easting: {easting}, Northing: {northing}, Elevation: {elevation}")
-                except ValueError as e:
-                    logging.error(f'Error processing row {line_count}: {e}')
-                    continue
-
-                rec = {'symbol': symbol,
-                       'pixel': pixel,
-                       'pos3d': pos3d,
-                       'name': name}
-                recs.append(rec)
-                line_count += 1
-
-    # 将更新后的数据写回文件
-    with open(filename, 'w', newline='', encoding='utf-8') as csv_file:
-        csv_writer = csv.writer(csv_file, delimiter=',')
-        csv_writer.writerows(updated_rows)
-
-    logging.debug(f'Processed {line_count} lines.')
-    return recs
-
-# **********
-# read data from the potential camera locations file
-# **********
-def read_camera_locations(camera_locations, dem_data):
-    updated_rows = []
-    with open(camera_locations, encoding='utf-8') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        line_count = 0
-        recs = []
-        for row in csv_reader:
-            if line_count == 0:
-                updated_rows.append(row)  # 保留标题行
-                line_count += 1
-                names = row
-            else:
-                grid_code = int(row[1])
-                longitude = float(row[2])
-                latitude = float(row[3])
-                elevation = get_dem_elevation(dem_data, (longitude, latitude), coord_type='wgs84') + 1.5
-                row[4] = str(elevation)  # 更新Elevation列
-                updated_rows.append(row)  # 保存更新后的行
-                # 添加坐标转换
-                try:
-                    logging.debug(f'Processing row {line_count}: lat={latitude}, lon={longitude}')
-                    easting, northing = geo_transformer.wgs84_to_utm(longitude, latitude)  # 注意顺序
-                    pos3d = np.array([easting, northing, elevation])
-                except ValueError as e:
-                    logging.error(f'Error processing row {line_count}: {e}')
-                    continue
-
-                rec = {'grid_code': grid_code,
-                       'pos3d': pos3d}
-                recs.append(rec)
-                line_count += 1
-
-    # 将更新后的数据写回文件
-    with open(camera_locations, 'w', newline='', encoding='utf-8') as csv_file:
-        csv_writer = csv.writer(csv_file, delimiter=',')
-        csv_writer.writerows(updated_rows)
-
-    logging.debug(f'Processed {line_count} lines.')
-    return recs
-
-# **********
-# Main function
-# **********
-def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, output, scale, dem_file):
-    # 确保工作目录为脚本所在目录
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
-
-    # 检查图像文件是否存在
-    image_path = os.path.join("historical photos", image_name)
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
-
-    im = cv2.imread(image_path)
-    im2 = np.copy(im)
-    im[:, :, 0] = im2[:, :, 2]
-    im[:, :, 1] = im2[:, :, 1]
-    im[:, :, 2] = im2[:, :, 0]
-
-    plt.figure(figsize=(11.69, 8.27))
-    plt.imshow(im)
-
-    # 加载DEM数据（DEM范围为UTM）
-    dem_data = load_dem_data(dem_file)
-
-    recs = read_points_data(features, pixel_x, pixel_y, scale, dem_data)
-    locations = read_camera_locations(camera_locations, dem_data)
-
-    for rec in recs:
-        symbol = rec['symbol']
-        pixel = rec['pixel']
-        if pixel[0] != 0 or pixel[1] != 0:
-            plt.text(pixel[0], pixel[1], symbol, color='red', fontsize=6)
-    num_matches12 = find_homographies(recs, locations, im, False, 60.0, output)
-    num_matches2 = num_matches12[:, 1]
-    num_matches2[num_matches2 == 0] = 1000000
-    print(np.min(num_matches2))
-    theloci = np.argmin(num_matches2)
-    print(f"【DEBUG】推测相机位置: {locations[theloci]['pos3d']}")
-
-
-# 主函数处理多个图像
 def main():
-    images_info = [
-        {
-            "image_name": "1898.jpg",
-            "json_file": "1898.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_1898.jpg",
-            "pixel_y": "Pixel_y_1898.jpg",
-            "output": "zOutput_1898.png",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        },
-        {
-            "image_name": "1900-1910.jpg",
-            "json_file": "1900-1910.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_1900-1910.jpg",
-            "pixel_y": "Pixel_y_1900-1910.jpg",
-            "output": "zOutput_1900-1910.png",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        },
-        # 添加更多图像的信息
-        # {
-        #     "image_name": "another_image.jpg",
-        #     "json_file": "another.json",
-        #     "features": "another_features.csv",
-        #     "camera_locations": "another_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_another.jpg",
-        #     "pixel_y": "Pixel_y_another.jpg",
-        #     "output": "zOutput_another.png",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_data_another.tif"
-        # }
-    ]
+    # 配置参数
+    dem_file = 'dem_dx.tif'
+    boundary_file = 'boundary_points_geo.csv'
+    utm_zone = 50  # 根据实际调整
 
-    # 指定要处理的图像信息
-    target_info = images_info[0]  # 修改此索引以选择要处理的图像，例如 0 表示处理第一个图像
+    # 1. 数据读取
+    print("1. 正在读取数据...")
+    try:
+        # 读取边界点并显式闭合
+        utm_coords = pd.read_csv(boundary_file)[['geo_x', 'geo_y', 'geo_z']].values.tolist()
+        if len(utm_coords) < 3:
+            raise ValueError("边界点数量不足（至少需要3个点）")
 
-    do_it(
-        target_info["image_name"],
-        target_info["json_file"],
-        target_info["features"],
-        target_info["camera_locations"],
-        target_info["pixel_x"],
-        target_info["pixel_y"],
-        target_info["output"],
-        target_info["scale"],
-        target_info["dem_file"]
+        # 关键修改1：显式闭合路径（若首尾点不同）
+        if (utm_coords[0][0] != utm_coords[-1][0]) or (utm_coords[0][1] != utm_coords[-1][1]):
+            utm_coords.append(utm_coords[0].copy())  # 避免原地修改
+            print("提示：已显式闭合边界路径")
+
+        # 读取DEM数据
+        dem, x_min, y_min, cell_size = read_dem(dem_file)
+    except Exception as e:
+        print(f"初始化失败: {str(e)}")
+        return
+
+    # 2. 坐标转换
+    print("\n2. 坐标转换...")
+    wgs84_coords = convert_utm_to_wgs84(utm_coords, utm_zone)
+    print("前两个转换后的WGS84坐标: ", wgs84_coords[:2])  # 避免输出过长
+
+    # 3. 创建精确多边形
+    print("\n3. 创建精确边界...")
+    try:
+        precise_polygon = create_precise_polygon(wgs84_coords)
+        print(f"多边形面积: {precise_polygon.area:.6f} 平方度")
+
+        # 验证多边形有效性
+        if not precise_polygon.is_valid:
+            print("警告：生成的多边形存在自相交，尝试修复...")
+            precise_polygon = precise_polygon.buffer(0)  # 缓冲修复
+    except Exception as e:
+        print(f"多边形创建失败: {str(e)}")
+        return
+
+    # 4. 筛选DEM数据中在多边形内部的点
+    print("\n4. 筛选DEM数据点...")
+    longitudes, latitudes, elevations = get_elevation_points_within_polygon(
+        dem, precise_polygon, x_min, y_min, cell_size
     )
+    valid_points = list(zip(longitudes, latitudes, elevations))
+    print(f"有效高程点数量: {len(valid_points)}")
+
+    if not valid_points:
+        print("错误：未获取到有效高程")
+        return
+
+    # 5. 可视化
+    print("\n5. 可视化结果...")
+    # 转换坐标以便可视化
+    utm_valid_points = convert_wgs84_to_utm(valid_points, utm_zone)
+    utm_wgs84_coords = convert_wgs84_to_utm(wgs84_coords, utm_zone)
+
+    # 2D边界对比图
+    plt.figure(figsize=(12, 6))
+    ax = plt.subplot(111)
+
+    # 绘制原始边界点
+    ax.plot(
+        *zip(*[(p[0], p[1]) for p in utm_wgs84_coords]),
+        'ro', markersize=4, label='original boundary points'
+    )
+
+    # 绘制生成的多边形边界
+    if precise_polygon.geom_type == 'Polygon':
+        exterior_coords = list(precise_polygon.exterior.coords)
+        utm_exterior = convert_wgs84_to_utm(
+            [(lon, lat, 0) for lon, lat in exterior_coords], utm_zone
+        )
+        ax.plot(
+            *zip(*[(p[0], p[1]) for p in utm_exterior]),
+            'b-', linewidth=1.5, label='processed boundary points'
+        )
+
+    ax.set_aspect('equal')
+    ax.legend()
+    plt.title("2D Boundary Comparison (UTM Coordinates)")
+    plt.show()
+
+    # 3D地形图（保持原代码不变）
+    print("\n5. 使用Delaunay三角剖分生成3D地形图...")
+    points = np.array([(p[0], p[1], p[2]) for p in utm_valid_points])
+    tri = Delaunay(points[:, :2])
+    triangles = remove_unnecessary_faces(tri.simplices, points)
+    fig = go.Figure(data=[
+        go.Mesh3d(
+            x=points[:, 0],
+            y=points[:, 1],
+            z=points[:, 2],
+            i=triangles[:, 0],
+            j=triangles[:, 1],
+            k=triangles[:, 2],
+            intensity=points[:, 2],
+            colorscale='Viridis',
+            opacity=0.8,
+            name='Terrain Mesh'
+        ),
+        go.Scatter3d(
+            x=[p[0] for p in utm_wgs84_coords],
+            y=[p[1] for p in utm_wgs84_coords],
+            z=[p[2] for p in utm_wgs84_coords],
+            mode='markers',
+            marker=dict(size=4, color='red'),
+            name='Original Boundary Points'
+        )
+    ])
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='Easting (m)',
+            yaxis_title='Northing (m)',
+            zaxis_title='Elevation (m)',
+            aspectmode='data'
+        ),
+        title='3D Terrain Reconstruction with Precise Boundary'
+    )
+    fig.show()
+
 
 if __name__ == "__main__":
     main()
-
-print('**********************')
-# print ('ret: ')
-# print (ret)
-# print ('mtx: ')
-# print (mtx)
-# print ('dist: ')
-# print (dist)
-# print('rvecs: ')
-# print(rvecs)
-# print ('tvecs: ')
-# print(tvecs)
-
-print('Done!')
