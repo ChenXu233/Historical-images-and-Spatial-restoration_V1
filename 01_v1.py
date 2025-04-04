@@ -498,7 +498,7 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
         pixel = rec['pixel']
         if pixel[0] != 0 or pixel[1] != 0:
             plt.text(pixel[0], pixel[1], symbol, color='red', fontsize=6)
-    num_matches12 = find_homographies(recs, locations, im, False, 70.0, output)
+    num_matches12 = find_homographies(recs, locations, im, False, 60.0, output)
     num_matches2 = num_matches12[:, 1]
     num_matches2[num_matches2 == 0] = 1000000
     print(np.min(num_matches2))
