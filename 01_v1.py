@@ -173,13 +173,13 @@ def find_homographies(recs, camera_locations, im, show, ransacbound, output):
     loc3ds = np.array(loc3ds)
     num_matches = np.zeros((loc3ds.shape[0], 2))
     scores = []
-    for i in range(0, grids.shape[0], 1):  # 50
+    for i in range(0, grids.shape[0], 1):
         grid_code_min = 0
         if grids[i] >= grid_code_min:
             if show:
                 print(i, grids[i], loc3ds[i])
-            M, num_matches[i, 0], num_matches[i, 1] = find_homography(recs, pixels, pos3ds, symbols, loc3ds[i], im, show,
-                                                                   ransacbound, output)
+            M, err1, err2 = find_homography(recs, pixels, pos3ds, symbols, loc3ds[i], im, show, ransacbound, output)
+            num_matches[i, 0], num_matches[i, 1] = err1, err2
         else:
             num_matches[i, :] = 0
         score = [i + 1, num_matches[i, 0], num_matches[i, 1], grids[i], loc3ds[i][0], loc3ds[i][1], loc3ds[i][2]]
@@ -498,12 +498,14 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
         pixel = rec['pixel']
         if pixel[0] != 0 or pixel[1] != 0:
             plt.text(pixel[0], pixel[1], symbol, color='red', fontsize=6)
-    num_matches12 = find_homographies(recs, locations, im, False, 60.0, output)
+    num_matches12 = find_homographies(recs, locations, im, False, 70.0, output)
     num_matches2 = num_matches12[:, 1]
     num_matches2[num_matches2 == 0] = 1000000
-    print(np.min(num_matches2))
-    theloci = np.argmin(num_matches2)
-    print(f"【DEBUG】推测相机位置: {locations[theloci]['pos3d']}")
+    min_idx = np.argmin(num_matches2)
+    print("Minimum average reprojection error:", np.min(num_matches2))
+    print("err1:", num_matches12[min_idx, 0])
+    print("err2:", num_matches12[min_idx, 1])
+    print(f"推测相机位置: {locations[min_idx]['pos3d']}, pointid: {min_idx + 1}, grid_code: {locations[min_idx]['grid_code']}")
 
 
 # 主函数处理多个图像
