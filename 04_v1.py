@@ -94,7 +94,7 @@ def remove_unnecessary_faces(triangles, points):
 def main():
     # 配置参数
     dem_file = 'dem_dx.tif'
-    boundary_file = 'boundary_points_geo.csv'
+    boundary_file = 'space_boundary.csv'
     utm_zone = 50  # 根据实际调整
 
     # 1. 数据读取
