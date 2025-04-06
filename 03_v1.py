@@ -554,12 +554,12 @@ def main():
     images_info = [
         {
             "image_name": "1898.jpg",
-            "json_file": "1898.json",
+            "json_file": "1898_dw.json",
             "features": "feature_points_with_annotations.csv",
             "camera_locations": "potential_camera_locations.csv",
             "pixel_x": "Pixel_x_1898.jpg",
             "pixel_y": "Pixel_y_1898.jpg",
-            "output": "zOutput_1898.png",
+            "output": "zOutput_1898.jpg",
             "scale": 1.0,
             "dem_file": "dem_dx.tif"
         },
@@ -570,22 +570,65 @@ def main():
             "camera_locations": "potential_camera_locations.csv",
             "pixel_x": "Pixel_x_1900-1910.jpg",
             "pixel_y": "Pixel_y_1900-1910.jpg",
-            "output": "zOutput_1900-1910.png",
+            "output": "zOutput_1900-1910.jpg",
             "scale": 1.0,
             "dem_file": "dem_dx.tif"
         },
-        # 添加更多图像的信息
-        # {
-        #     "image_name": "another_image.jpg",
-        #     "json_file": "another.json",
-        #     "features": "another_features.csv",
-        #     "camera_locations": "another_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_another.jpg",
-        #     "pixel_y": "Pixel_y_another.jpg",
-        #     "output": "zOutput_another.png",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_data_another.tif"
-        # }
+        {
+            "image_name": "1910.jpg",
+            "json_file": "1910.json",
+            "features": "feature_points_with_annotations.csv",
+            "camera_locations": "potential_camera_locations.csv",
+            "pixel_x": "Pixel_x_1910.jpg",
+            "pixel_y": "Pixel_y_1910.jpg",
+            "output": "zOutput_1910.jpg",
+            "scale": 1.0,
+            "dem_file": "dem_dx.tif"
+        },
+        {
+            "image_name": "1920-1930.jpg",
+            "json_file": "1920-1930.json",
+            "features": "feature_points_with_annotations.csv",
+            "camera_locations": "potential_camera_locations.csv",
+            "pixel_x": "Pixel_x_1920-1930.jpg",
+            "pixel_y": "Pixel_y_1920-1930.jpg",
+            "output": "zOutput_1920-1930.jpg",
+            "scale": 1.0,
+            "dem_file": "dem_dx.tif"
+        },
+        {
+            "image_name": "1925-1930.jpg",
+            "json_file": "1925-1930.json",
+            "features": "feature_points_with_annotations.csv",
+            "camera_locations": "potential_camera_locations.csv",
+            "pixel_x": "Pixel_x_1925-1930.jpg",
+            "pixel_y": "Pixel_y_1925-1930.jpg",
+            "output": "zOutput_1925-1930.jpg",
+            "scale": 1.0,
+            "dem_file": "dem_dx.tif"
+        },
+        {
+            "image_name": "Kuliang.jpg",
+            "json_file": "Kuliang.json",
+            "features": "feature_points_with_annotations.csv",
+            "camera_locations": "potential_camera_locations.csv",
+            "pixel_x": "Pixel_x_Kuliang.jpg",
+            "pixel_y": "Pixel_y_Kuliang.jpg",
+            "output": "zOutput_Kuliang.jpg",
+            "scale": 1.0,
+            "dem_file": "dem_dx.tif"
+        },
+        {
+            "image_name": "Siems Siemssen.jpg",
+            "json_file": "Siems Siemssen.json",
+            "features": "feature_points_with_annotations.csv",
+            "camera_locations": "potential_camera_locations.csv",
+            "pixel_x": "Pixel_x_Siems Siemssen.jpg",
+            "pixel_y": "Pixel_y_Siems Siemssen.jpg",
+            "output": "zOutput_Siems Siemssen.jpg",
+            "scale": 1.0,
+            "dem_file": "dem_dx.tif"
+        }
     ]
 
     # 指定要处理的图像信息
