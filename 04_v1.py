@@ -2,11 +2,11 @@ import numpy as np
 import plotly.graph_objects as go
 import rasterio
 from pyproj import Transformer
-from scipy.spatial import Delaunay
+from scipy.spatial import Delaunay, ConvexHull
 from shapely.geometry import Polygon, Point
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import trimesh
 
 def read_dem(file_path):
     with rasterio.open(file_path) as dataset:
@@ -19,6 +19,7 @@ def read_dem(file_path):
         print(f"DEM数据范围: 经度 [{x_min:.6f} -> {x_min + cell_size * dem_data.shape[1]:.6f}]")
         print(f"          纬度 [{y_min:.6f} -> {y_min - cell_size * dem_data.shape[0]:.6f}]")
     return dem_data, x_min, y_min, cell_size
+
 
 def get_elevation_points_within_polygon(dem_data, polygon, x_min, y_min, cell_size):
     elevations = []
@@ -42,10 +43,12 @@ def get_elevation_points_within_polygon(dem_data, polygon, x_min, y_min, cell_si
 
     return longitudes, latitudes, elevations
 
+
 def convert_utm_to_wgs84(utm_coordinates, zone_number):
-    transformer = Transformer.from_crs(f"epsg:326{zone_number}", "epsg:4326", always_xy=True)  # 关键: always_xy=True
+    transformer = Transformer.from_crs(f"epsg:326{zone_number}", "epsg:4326", always_xy=True)
     return [(lon, lat, elev) for easting, northing, elev in utm_coordinates
             for lon, lat in [transformer.transform(easting, northing)]]
+
 
 def convert_wgs84_to_utm(wgs84_coordinates, zone_number):
     transformer = Transformer.from_crs("epsg:4326", f"epsg:326{zone_number}", always_xy=True)
@@ -53,27 +56,22 @@ def convert_wgs84_to_utm(wgs84_coordinates, zone_number):
             for easting, northing in [transformer.transform(lon, lat)]]
 
 
-def create_precise_polygon(wgs84_coords):
-    """直接使用有序的原始点创建凹多边形，显式闭合路径"""
+def create_convex_hull_polygon(wgs84_coords):
+    """
+    使用边界点生成最小外接多边形（凸包）。
+    """
     # 提取经纬度
-    coords = [(lon, lat) for lon, lat, _ in wgs84_coords]
+    coords = np.array([(lon, lat) for lon, lat, _ in wgs84_coords])
 
-    # 显式闭合路径（若首尾点不同）
-    if coords and (coords[0] != coords[-1]):
-        coords.append(coords[0])
+    # 计算凸包
+    hull = ConvexHull(coords)
+    hull_points = coords[hull.vertices]
 
-    # 创建多边形（假设coords已按实际轮廓顺序排列）
-    polygon = Polygon(coords)
+    # 创建凸包多边形
+    convex_hull_polygon = Polygon(hull_points)
 
-    # 验证边界偏差
-    original = np.array(coords[:-1])  # 排除闭合点
-    processed = np.array(polygon.exterior.coords)[:-1]
-    if original.shape[0] != processed.shape[0]:
-        print("警告：坐标数量不一致，可能因输入点无序导致简化")
-    deviation = np.max(np.abs(original - processed))
-    print(f"边界保真度检查: 最大偏差 {deviation:.10f} 度")
+    return convex_hull_polygon
 
-    return polygon
 
 def remove_unnecessary_faces(triangles, points):
     """
@@ -91,10 +89,21 @@ def remove_unnecessary_faces(triangles, points):
             valid_triangles.append(tri)
     return np.array(valid_triangles)
 
+def export_stl(filename, vertices, faces):
+    """
+    导出 STL 文件
+    """
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+    mesh.export(filename)
+    print(f"STL 文件已保存为 {filename}")
+
 def main():
     # 配置参数
     dem_file = 'dem_dx.tif'
-    boundary_file = 'space_boundary.csv'
+    boundary_file = 'space_boundary_1900-1910.csv'
+    feature_file = 'feature_points_with_annotations.csv'  # 新增：特征点文件
+    pixel_x_col = 'Pixel_x_1900-1910.jpg'
+    pixel_y_col = 'Pixel_y_1900-1910.jpg'
     utm_zone = 50  # 根据实际调整
 
     # 1. 数据读取
@@ -105,15 +114,24 @@ def main():
         if len(utm_coords) < 3:
             raise ValueError("边界点数量不足（至少需要3个点）")
 
-        # 关键修改1：显式闭合路径（若首尾点不同）
-        if (utm_coords[0][0] != utm_coords[-1][0]) or (utm_coords[0][1] != utm_coords[-1][1]):
-            utm_coords.append(utm_coords[0].copy())  # 避免原地修改
-            print("提示：已显式闭合边界路径")
-
         # 读取DEM数据
         dem, x_min, y_min, cell_size = read_dem(dem_file)
     except Exception as e:
         print(f"初始化失败: {str(e)}")
+        return
+
+    # 读取特征点数据
+    try:
+        feature_data = pd.read_csv(feature_file)
+        feature_points = feature_data[
+            (feature_data[pixel_x_col] != 0) & (feature_data[pixel_y_col] != 0)
+            ][['Longitude', 'Latitude', 'Elevation', 'Symbol']].values.tolist()
+        if not feature_points:
+            raise ValueError("未找到有效的特征点")
+        feature_symbols = [symbol for _, _, _, symbol in feature_points]  # 分离出symbol
+        feature_points = [(lon, lat, elev) for lon, lat, elev, _ in feature_points]  # 只保留坐标
+    except Exception as e:
+        print(f"读取特征点失败: {str(e)}")
         return
 
     # 2. 坐标转换
@@ -121,16 +139,20 @@ def main():
     wgs84_coords = convert_utm_to_wgs84(utm_coords, utm_zone)
     print("前两个转换后的WGS84坐标: ", wgs84_coords[:2])  # 避免输出过长
 
-    # 3. 创建精确多边形
-    print("\n3. 创建精确边界...")
+    # 特征点坐标转换
+    feature_utm_coords = convert_wgs84_to_utm(feature_points, utm_zone)
+    print("前两个转换后的特征点UTM坐标: ", feature_utm_coords[:2])  # 避免输出过长
+
+    # 3. 创建凸包多边形
+    print("\n3. 创建最小外接多边形...")
     try:
-        precise_polygon = create_precise_polygon(wgs84_coords)
-        print(f"多边形面积: {precise_polygon.area:.6f} 平方度")
+        convex_hull_polygon = create_convex_hull_polygon(wgs84_coords)
+        print(f"多边形面积: {convex_hull_polygon.area:.6f} 平方度")
 
         # 验证多边形有效性
-        if not precise_polygon.is_valid:
+        if not convex_hull_polygon.is_valid:
             print("警告：生成的多边形存在自相交，尝试修复...")
-            precise_polygon = precise_polygon.buffer(0)  # 缓冲修复
+            convex_hull_polygon = convex_hull_polygon.buffer(0)  # 缓冲修复
     except Exception as e:
         print(f"多边形创建失败: {str(e)}")
         return
@@ -138,7 +160,7 @@ def main():
     # 4. 筛选DEM数据中在多边形内部的点
     print("\n4. 筛选DEM数据点...")
     longitudes, latitudes, elevations = get_elevation_points_within_polygon(
-        dem, precise_polygon, x_min, y_min, cell_size
+        dem, convex_hull_polygon, x_min, y_min, cell_size
     )
     valid_points = list(zip(longitudes, latitudes, elevations))
     print(f"有效高程点数量: {len(valid_points)}")
@@ -154,36 +176,91 @@ def main():
     utm_wgs84_coords = convert_wgs84_to_utm(wgs84_coords, utm_zone)
 
     # 2D边界对比图
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 6), dpi=300)
     ax = plt.subplot(111)
 
     # 绘制原始边界点
     ax.plot(
         *zip(*[(p[0], p[1]) for p in utm_wgs84_coords]),
-        'ro', markersize=4, label='original boundary points'
+        'ro', markersize=4
     )
 
-    # 绘制生成的多边形边界
-    if precise_polygon.geom_type == 'Polygon':
-        exterior_coords = list(precise_polygon.exterior.coords)
+    # 绘制生成的凸包多边形边界
+    if convex_hull_polygon.geom_type == 'Polygon':
+        exterior_coords = list(convex_hull_polygon.exterior.coords)
         utm_exterior = convert_wgs84_to_utm(
             [(lon, lat, 0) for lon, lat in exterior_coords], utm_zone
         )
         ax.plot(
             *zip(*[(p[0], p[1]) for p in utm_exterior]),
-            'b-', linewidth=1.5, label='processed boundary points'
+            'b-', linewidth=1.5
         )
 
     ax.set_aspect('equal')
-    ax.legend()
-    plt.title("2D Boundary Comparison (UTM Coordinates)")
+    plt.title("2D Boundary Comparison (UTM Coordinates)", fontsize=10)
+
+    # 设置轴刻度格式、刻度和标题字体大小
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{int(y):,}'))
+    ax.tick_params(labelsize=8)  # 调整刻度标签字体大小
+    ax.set_xlabel('Easting (m)', fontsize=8)  # 调整X轴标题字体大小
+    ax.set_ylabel('Northing (m)', fontsize=8)  # 调整Y轴标题字体大小
+
+    plt.savefig('2d_boundary_comparison.png', dpi=300, bbox_inches='tight')
     plt.show()
 
-    # 3D地形图（保持原代码不变）
+    # 生成二维地形图
+    plt.figure(figsize=(12, 8), dpi=300)
+    ax = plt.subplot(111)
+    sc = ax.scatter(
+        [p[0] for p in utm_valid_points],
+        [p[1] for p in utm_valid_points],
+        c=[p[2] for p in utm_valid_points],
+        cmap='viridis',
+        marker='o'
+    )
+
+    # 添加特征点
+    feature_x = [p[0] for p in feature_utm_coords]
+    feature_y = [p[1] for p in feature_utm_coords]
+    ax.scatter(feature_x, feature_y, color='blue', label='Feature Points')
+    for i, symbol in enumerate(feature_symbols):
+        # 调整 feature text 的字体大小为 10
+        ax.text(feature_x[i] + 5, feature_y[i], symbol, fontsize=9, color='black')
+
+    # 添加颜色条并设置字体大小
+    cbar = plt.colorbar(sc, label='Elevation (m)')
+    cbar.ax.tick_params(labelsize=8)  # 调整颜色条刻度字体大小为 8
+    cbar.set_label('Elevation (m)', fontsize=8)  # 调整颜色条标签字体大小为 8
+
+    # 设置标题和轴标签字体大小为 8
+    plt.title("2D Terrain Map with Elevation", fontsize=10)
+    ax.set_xlabel('Easting (m)', fontsize=8)
+    ax.set_ylabel('Northing (m)', fontsize=8)
+    ax.set_aspect('equal')
+
+    # 设置网格和刻度格式
+    plt.grid(True)
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{int(y):,}'))
+    ax.xaxis.set_major_locator(plt.MultipleLocator(100))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(100))
+    ax.tick_params(labelsize=8)  # 调整刻度字体大小为 8
+
+    # 裁剪图形边距
+    plt.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.05)
+    plt.tight_layout(pad=1.0)
+
+    # 保存图像
+    plt.savefig('2d_terrain_map.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+    # 3D地形图
     print("\n5. 使用Delaunay三角剖分生成3D地形图...")
     points = np.array([(p[0], p[1], p[2]) for p in utm_valid_points])
     tri = Delaunay(points[:, :2])
     triangles = remove_unnecessary_faces(tri.simplices, points)
+
     fig = go.Figure(data=[
         go.Mesh3d(
             x=points[:, 0],
@@ -198,25 +275,57 @@ def main():
             name='Terrain Mesh'
         ),
         go.Scatter3d(
-            x=[p[0] for p in utm_wgs84_coords],
-            y=[p[1] for p in utm_wgs84_coords],
-            z=[p[2] for p in utm_wgs84_coords],
-            mode='markers',
-            marker=dict(size=4, color='red'),
-            name='Original Boundary Points'
+            x=[p[0] for p in feature_utm_coords],
+            y=[p[1] for p in feature_utm_coords],
+            z=[p[2] for p in feature_utm_coords],
+            mode='markers+text',
+            marker=dict(size=4, color='blue'),
+            text=feature_symbols,
+            textposition="top center",
+            textfont=dict(size=10),
+            name='Feature Points'
         )
     ])
     fig.update_layout(
         scene=dict(
-            xaxis_title='Easting (m)',
-            yaxis_title='Northing (m)',
-            zaxis_title='Elevation (m)',
+            xaxis=dict(
+                title=dict(
+                    text='Easting (m)',
+                    font=dict(size=10)  # 设置 X 轴标题字体大小
+                ),
+                tickformat=',d',
+                tickfont=dict(size=10)  # 设置 X 轴刻度字体大小
+            ),
+            yaxis=dict(
+                title=dict(
+                    text='Northing (m)',
+                    font=dict(size=10)  # 设置 Y 轴标题字体大小
+                ),
+                tickformat=',d',
+                tickfont=dict(size=10)  # 设置 Y 轴刻度字体大小
+            ),
+            zaxis=dict(
+                title=dict(
+                    text='Elevation (m)',
+                    font=dict(size=10)  # 设置 Z 轴标题字体大小
+                ),
+                tickformat=',d',
+                tickfont=dict(size=10),  # 设置 Z 轴刻度字体大小
+            ),
             aspectmode='data'
         ),
-        title='3D Terrain Reconstruction with Precise Boundary'
+        title='3D Terrain Reconstruction with Feature Points'
     )
     fig.show()
 
+    # 导出 HTML 文件
+    html_filename = '3d_terrain_map.html'
+    fig.write_html(html_filename)
+    print(f"HTML 文件已保存为 {html_filename}")
+
+    # 导出 STL 文件
+    stl_filename = '3d_terrain_map.stl'
+    export_stl(stl_filename, points, triangles)
 
 if __name__ == "__main__":
     main()
