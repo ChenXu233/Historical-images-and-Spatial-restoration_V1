@@ -153,7 +153,7 @@ def calc_bearing(x1, y1, x2, y2):
 # **********
 # Find homographies function
 # **********
-def find_homographies(recs, camera_locations, im, show, ransacbound, output):
+def find_homographies(recs, camera_locations, im, show, ransacbound, output, pixel_x, pixel_y, scale, dem_data, features):
     pixels = []
     pos3ds = []
     symbols = []
@@ -173,13 +173,15 @@ def find_homographies(recs, camera_locations, im, show, ransacbound, output):
     loc3ds = np.array(loc3ds)
     num_matches = np.zeros((loc3ds.shape[0], 2))
     scores = []
+    homographies = []
     for i in range(0, grids.shape[0], 1):
         grid_code_min = 0
         if grids[i] >= grid_code_min:
             if show:
                 print(i, grids[i], loc3ds[i])
-            M, err1, err2 = find_homography(recs, pixels, pos3ds, symbols, loc3ds[i], im, show, ransacbound, output)
+            M, err1, err2, mask = find_homography(recs, pixels, pos3ds, symbols, loc3ds[i], im, show, ransacbound, output, pixel_x, pixel_y, scale, dem_data, features)
             num_matches[i, 0], num_matches[i, 1] = err1, err2
+            homographies.append((M, mask))
         else:
             num_matches[i, :] = 0
         score = [i + 1, num_matches[i, 0], num_matches[i, 1], grids[i], loc3ds[i][0], loc3ds[i][1], loc3ds[i][2]]
@@ -193,12 +195,12 @@ def find_homographies(recs, camera_locations, im, show, ransacbound, output):
         for s in scores:
             csvWriter.writerow(s)
 
-    return num_matches
+    return num_matches, homographies
 
 # **********
 # Find homography function
 # **********
-def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ransacbound, outputfile):
+def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ransacbound, outputfile, pixel_x, pixel_y, scale, dem_data, features):
     pixels = np.array(pixels)
     pos2 = np.zeros((len(pixels), 2))
     good = np.zeros(len(pixels))
@@ -222,7 +224,7 @@ def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ra
             symbol = rec['symbol']
             pixel = rec['pixel']
             if pixel[0] != 0 or pixel[1] != 0:
-                plt.text(pixel[0], pixel[1], symbol, color='purple', fontsize=6, weight='bold')
+                plt.text(pixel[0] + 10, pixel[1] - 5, symbol, color='red', fontsize=24, weight='bold')
     err1 = 0
     err2 = 0
     feature = ['id', 'symbol', 'name', 'x', 'y', 'pixel_x', 'pixel_y', 'calc_pixel_x', 'calc_pixel_y']
@@ -246,10 +248,10 @@ def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ra
             err1 += np.linalg.norm(p1 - pp2[0:2])
             err2 += np.linalg.norm(P2 - PP2[0:2])
         if show:
-            color = 'green' if mask[i] == 1 else 'red'
-            plt.plot([p1[0], pp2[0]], [p1[1], pp2[1]], color=color, linewidth=2)
-            plt.plot(p1[0], p1[1], marker='X', color=color, markersize=3)
-            plt.plot(pp2[0], pp2[1], marker='o', color=color, markersize=3)
+            color = 'green' if mask[i] == 1 else 'purple'
+            plt.plot([p1[0], pp2[0]], [p1[1], pp2[1]], color='red', linewidth=2, zorder=3)
+            plt.plot(p1[0], p1[1], marker='X', color=color, markersize=12, zorder=2)
+            plt.plot(pp2[0], pp2[1], marker='o', color=color, markersize=12, zorder=2)
             sym = ''
             name = ''
             for r in recs:
@@ -263,23 +265,6 @@ def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ra
             feature = [i, sym, name, x, y, p1[0], p1[1], pp2[0], pp2[1]]
             features.append(feature)
 
-    i = -1
-    for r in recs:  # Extracting features that were not noted on the image (pixel_x and pixel_y are 0)
-        i += 1
-        p1 = pixels[i, :]
-        if p1[0] == 0 and p1[1] == 0:
-            pp = np.array([pos2[i, 0], pos2[i, 1], 1.0])
-            pp2 = np.matmul(np.linalg.inv(M), pp)
-            pp2 = pp2 / pp2[2]
-            logging.debug(f'Unnoted Feature {i}: symbol={r["symbol"]}, pp2={pp2[0:2]}')
-            if show:
-                plt.text(pp2[0], pp2[1], r['symbol'], color='black', fontsize=6, style='italic',
-                         weight='bold')
-                plt.plot(pp2[0], pp2[1], marker='s', markersize=3, color='black')
-                x = r['pos3d'][0]
-                y = r['pos3d'][1]
-                feature = [i, recs[i]['symbol'], recs[i]['name'], x, y, 0, 0, pp2[0], pp2[1]]
-                features.append(feature)
     if show:
         outputCsv = outputfile.replace(".jpg", "_accuracies.csv")
         with open(outputCsv, 'w', newline='', encoding='utf-8-sig') as csvFile:
@@ -296,13 +281,15 @@ def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ra
                 csvWriter.writerow(r)
 
         print('Output image file: ', outputfile)
-        plt.savefig(outputfile.replace(".jpg", "_output.png"), dpi=300)
+        plt.savefig(outputfile.replace(".jpg", "_output.png"), dpi=300, bbox_inches='tight')
+        plt.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.05)  # 移除边距
+        plt.tight_layout(pad=1.0)  # 冗余保险
         plt.show()
 
     err2 += np.sum(1 - mask) * ransacbound
     if show:
         print('err', err1, err1 / np.sum(mask), err2, err2 / np.sum(mask))
-    return M, err1, err2
+    return M, err1, err2, mask
 
 # 加载DEM数据
 def load_dem_data(dem_file):
@@ -465,6 +452,65 @@ def read_camera_locations(camera_locations, dem_data):
     logging.debug(f'Processed {line_count} lines.')
     return recs
 
+def load_and_prepare_image(image_path):
+    im = cv2.imread(image_path)
+    im2 = np.copy(im)
+    im[:, :, 0] = im2[:, :, 2]
+    im[:, :, 1] = im2[:, :, 1]
+    im[:, :, 2] = im2[:, :, 0]
+    return im
+
+def process_features(recs, dem_data, pixel_x, pixel_y, camera_location, features, M):
+    features_list = []
+    with open(features, encoding='utf-8') as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        line_count = 0
+        for row in csv_reader:
+            if line_count == 0:
+                line_count += 1
+                indx = row.index(pixel_x)
+                indy = row.index(pixel_y)
+            else:
+                if int(row[indx]) == 0 and int(row[indy]) == 0:
+                    symbol = row[1]
+                    longitude = float(row[4])
+                    latitude = float(row[5])
+                    elevation = get_dem_elevation(dem_data, (longitude, latitude), coord_type='wgs84')
+                    easting, northing = geo_transformer.wgs84_to_utm(longitude, latitude)
+                    camera_easting, camera_northing, camera_elevation = camera_location
+                    relative_easting = easting - camera_easting
+                    relative_northing = northing - camera_northing
+                    relative_elevation = elevation - camera_elevation
+                    p = np.array([relative_elevation, relative_northing, relative_easting])
+                    p = p / p[2]
+                    pp2 = np.matmul(np.linalg.inv(M), p)
+                    pp2 = pp2 / pp2[2]
+                    features_list.append((symbol, pp2))
+    return features_list
+
+def plot_features_with_red_and_yellow(recs, dem_data, pixel_x, pixel_y, camera_location, features, image_path, outputfile, M):
+    im = load_and_prepare_image(image_path)
+    plt.figure(figsize=(40,20))
+    plt.imshow(im)
+
+    for rec in recs:
+        symbol = rec['symbol']
+        pixel = rec['pixel']
+        if pixel[0] != 0 or pixel[1] != 0:
+            plt.text(pixel[0] + 7, pixel[1] - 4, symbol, color='red', fontsize=16)
+            plt.plot(pixel[0], pixel[1], marker='s', markersize=4, color='red')
+
+    features_list = process_features(recs, dem_data, pixel_x, pixel_y, camera_location, features, M)
+    for symbol, pp2 in features_list:
+        print(f"读取点: Symbol={symbol}, 重投影后的像素坐标=({pp2[0]:.2f}, {pp2[1]:.2f})")
+        plt.text(pp2[0] + 7, pp2[1] - 4, symbol, color='yellow', fontsize=16, style='italic', weight='bold')
+        plt.plot(pp2[0], pp2[1], marker='s', markersize=4, color='yellow')
+
+    plt.savefig(outputfile.replace(".jpg", "_red_and_black_output.png"), dpi=300, bbox_inches='tight')
+    plt.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.05)  # 移除边距
+    plt.tight_layout(pad=1.0)  # 冗余保险
+    plt.show()
+
 # **********
 # Main function
 # **********
@@ -478,14 +524,8 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image not found: {image_path}")
 
-    im = cv2.imread(image_path)
-    im2 = np.copy(im)
-    im[:, :, 0] = im2[:, :, 2]
-    im[:, :, 1] = im2[:, :, 1]
-    im[:, :, 2] = im2[:, :, 0]
-
-    plt.figure(figsize=(11.69, 8.27))
-    plt.imshow(im)
+    # 加载图像
+    im = load_and_prepare_image(image_path)
 
     # 加载DEM数据（DEM范围为UTM）
     dem_data = load_dem_data(dem_file)
@@ -493,12 +533,12 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
     recs = read_points_data(features, pixel_x, pixel_y, scale, dem_data)
     locations = read_camera_locations(camera_locations, dem_data)
 
-    for rec in recs:
-        symbol = rec['symbol']
-        pixel = rec['pixel']
-        if pixel[0] != 0 or pixel[1] != 0:
-            plt.text(pixel[0], pixel[1], symbol, color='red', fontsize=6)
-    num_matches12 = find_homographies(recs, locations, im, False, 70.0, output)
+    pixels = np.array([rec['pixel'] for rec in recs])
+    pos3ds = np.array([rec['pos3d'] for rec in recs])
+    symbols = [rec['symbol'] for rec in recs]
+
+    # 保持show参数为False来计算误差
+    num_matches12, homographies = find_homographies(recs, locations, im, False, 70.0, output, pixel_x, pixel_y, scale, dem_data, features)
     num_matches2 = num_matches12[:, 1]
     num_matches2[num_matches2 == 0] = 1000000
     min_idx = np.argmin(num_matches2)
@@ -507,8 +547,14 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
     print("err2:", num_matches12[min_idx, 1])
     print(f"推测相机位置: {locations[min_idx]['pos3d']}, pointid: {min_idx + 1}, grid_code: {locations[min_idx]['grid_code']}")
 
+    best_M, best_mask = homographies[min_idx]
 
-# 主函数处理多个图像
+    # 调用新增的第一个函数生成红色和黑色特征点图像
+    plot_features_with_red_and_yellow(recs, dem_data, pixel_x, pixel_y, locations[min_idx]['pos3d'], features, image_path, output, best_M)
+
+    # 调用find_homography函数内部的绘制功能生成绿色和红色特征点图像
+    find_homography(recs, pixels, pos3ds, symbols, locations[min_idx]['pos3d'], im, True, 70.0, output, pixel_x, pixel_y, scale, dem_data, features)
+
 def main():
     images_info = [
         {
@@ -518,7 +564,7 @@ def main():
             "camera_locations": "potential_camera_locations.csv",
             "pixel_x": "Pixel_x_1898.jpg",
             "pixel_y": "Pixel_y_1898.jpg",
-            "output": "zOutput_1898.png",
+            "output": "zOutput_1898.jpg",
             "scale": 1.0,
             "dem_file": "dem_dx.tif"
         },
@@ -529,22 +575,65 @@ def main():
             "camera_locations": "potential_camera_locations.csv",
             "pixel_x": "Pixel_x_1900-1910.jpg",
             "pixel_y": "Pixel_y_1900-1910.jpg",
-            "output": "zOutput_1900-1910.png",
+            "output": "zOutput_1900-1910.jpg",
             "scale": 1.0,
             "dem_file": "dem_dx.tif"
         },
-        # 添加更多图像的信息
-        # {
-        #     "image_name": "another_image.jpg",
-        #     "json_file": "another.json",
-        #     "features": "another_features.csv",
-        #     "camera_locations": "another_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_another.jpg",
-        #     "pixel_y": "Pixel_y_another.jpg",
-        #     "output": "zOutput_another.png",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_data_another.tif"
-        # }
+        {
+             "image_name": "1910.jpg",
+             "json_file": "1910.json",
+             "features": "feature_points_with_annotations.csv",
+             "camera_locations": "potential_camera_locations.csv",
+             "pixel_x": "Pixel_x_1910.jpg",
+             "pixel_y": "Pixel_y_1910.jpg",
+             "output": "zOutput_1910.jpg",
+             "scale": 1.0,
+             "dem_file": "dem_dx.tif"
+        },
+        {
+             "image_name": "1920-1930.jpg",
+             "json_file": "1920-1930.json",
+             "features": "feature_points_with_annotations.csv",
+             "camera_locations": "potential_camera_locations.csv",
+             "pixel_x": "Pixel_x_1920-1930.jpg",
+             "pixel_y": "Pixel_y_1920-1930.jpg",
+             "output": "zOutput_1920-1930.jpg",
+             "scale": 1.0,
+             "dem_file": "dem_dx.tif"
+        },
+        {
+             "image_name": "1925-1930.jpg",
+             "json_file": "1925-1930.json",
+             "features": "feature_points_with_annotations.csv",
+             "camera_locations": "potential_camera_locations.csv",
+             "pixel_x": "Pixel_x_1925-1930.jpg",
+             "pixel_y": "Pixel_y_1925-1930.jpg",
+             "output": "zOutput_1925-1930.jpg",
+             "scale": 1.0,
+             "dem_file": "dem_dx.tif"
+        },
+        {
+             "image_name": "Kuliang.jpg",
+             "json_file": "Kuliang.json",
+             "features": "feature_points_with_annotations.csv",
+             "camera_locations": "potential_camera_locations.csv",
+             "pixel_x": "Pixel_x_Kuliang.jpg",
+             "pixel_y": "Pixel_y_Kuliang.jpg",
+             "output": "zOutput_Kuliang.jpg",
+             "scale": 1.0,
+             "dem_file": "dem_dx.tif"
+        },
+        {
+             "image_name": "Siems Siemssen.jpg",
+             "json_file": "Siems Siemssen.json",
+             "features": "feature_points_with_annotations.csv",
+             "camera_locations": "potential_camera_locations.csv",
+             "pixel_x": "Pixel_x_Siems Siemssen.jpg",
+             "pixel_y": "Pixel_y_Siems Siemssen.jpg",
+             "output": "zOutput_Siems Siemssen.jpg",
+             "scale": 1.0,
+             "dem_file": "dem_dx.tif"
+        }
     ]
 
     # 指定要处理的图像信息
@@ -566,15 +655,4 @@ if __name__ == "__main__":
     main()
 
 print('**********************')
-# print ('ret: ')
-# print (ret)
-# print ('mtx: ')
-# print (mtx)
-# print ('dist: ')
-# print (dist)
-# print('rvecs: ')
-# print(rvecs)
-# print ('tvecs: ')
-# print(tvecs)
-
 print('Done!')
