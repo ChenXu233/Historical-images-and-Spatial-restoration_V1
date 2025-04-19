@@ -134,7 +134,7 @@ def estimate_camera_pose(pos3d, pixels, K):
     success, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(
         pos3d, pixels, K, dist_coeffs,
         iterationsCount=5000,
-        reprojectionError=30.0,
+        reprojectionError=50.0,
         confidence=0.99
     )
     print("Inliers:\n", inliers)
@@ -237,10 +237,6 @@ def compute_optimization_factors(control_points, K, R, ray_origin):
         optimization_factor_y = ideal_direction[1] / computed_ray[1]
         optimization_factor_z = ideal_direction[2] / computed_ray[2]
 
-        # 增加异常值检测和过滤
-        if abs(optimization_factor_x) > 2 or abs(optimization_factor_y) > 2 or abs(optimization_factor_z) > 2:
-            print(f"【警告】控制点 {cp['symbol']} 的优化因子异常，已过滤: ({optimization_factor_x}, {optimization_factor_y}, {optimization_factor_z})")
-            continue
 
         optimization_factors.append((optimization_factor_x, optimization_factor_y, optimization_factor_z))
         cp['factors'] = (optimization_factor_x, optimization_factor_y, optimization_factor_z)  # 保存优化因子到控制点
@@ -272,7 +268,7 @@ def ray_intersect_dem(ray_origin, ray_direction, dem_data, max_search_dist=5000,
             return None, step_count
         logging.debug(f"【DEBUG】DEM海拔: {dem_elev}, 当前高度: {current_pos[2]}")
 
-        if step_count >= 50 and current_pos[2] <= dem_elev + 0.5 :
+        if step_count >= 50 and current_pos[2] <= dem_elev + 0.5:
             return np.array([current_easting, current_northing, current_pos[2]]), step_count
 
         current_pos[0] += step * ray_direction[0]
@@ -359,15 +355,14 @@ def convert_boundary_to_geo(json_data, K, R, ray_origin, dem_data, control_point
             boundary_geo_coords[key] = []
             boundary_points[key] = []
 
-            boundary_points_obj = obj['segmentation']
-            for pixel_x, pixel_y in boundary_points_obj:
-                geo_coord, _ = pixel_to_geo([pixel_x, pixel_y], K, R, ray_origin, dem_data, control_points,
-                                            optimization_factors)  # 只获取地理坐标部分
-                if geo_coord is not None:
-                    boundary_geo_coords[key].append(geo_coord)
-                    boundary_points[key].append((pixel_x, pixel_y))
+        boundary_points_obj = obj['segmentation']
+        for pixel_x, pixel_y in boundary_points_obj:
+            geo_coord, _ = pixel_to_geo([pixel_x, pixel_y], K, R, ray_origin, dem_data, control_points, optimization_factors)
+            if geo_coord is not None:
+                boundary_geo_coords[key].append(geo_coord)
+                boundary_points[key].append((pixel_x, pixel_y))
 
-        return boundary_geo_coords, boundary_points
+    return boundary_geo_coords, boundary_points
 
 # 生成csv
 def save_boundary_to_csv(boundary_geo_coords, boundary_points, csv_file='boundary_points_geo.csv'):
@@ -529,7 +524,7 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
                 print(f"Easting: {geo_coord[0]:.2f}, Northing: {geo_coord[1]:.2f}, 高度: {geo_coord[2]:.2f}")
                 print(f"射线步进总步数: {total_steps}")
             else:
-                print(f"无法找到 ({input_pixel_x}, {input_pixel_y}) 对应的地理坐标，请检查输入或 DEM 数据。")
+                print(f"无法找到 ({input_pixel_x, input_pixel_y}) 对应的地理坐标，请检查输入或 DEM 数据。")
 
         except ValueError as e:
             print(f"输入格式错误: {e}")
@@ -546,15 +541,20 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
     # 保存为csv
     save_boundary_to_csv(boundary_geo_coords, boundary_points)
 
+    # 创建输出目录
+    output_shapefiles_dir = os.path.join(os.getcwd(), "output_shapefiles_1898")
+    if not os.path.exists(output_shapefiles_dir):
+        os.makedirs(output_shapefiles_dir)
+
     # 保存为Shapefile
-    save_boundary_to_shapefiles(boundary_geo_coords, json_data, "output_shapefiles")
+    save_boundary_to_shapefiles(boundary_geo_coords, json_data, output_shapefiles_dir)
 
 # 主函数处理多个图像
 def main():
     images_info = [
         {
             "image_name": "1898.jpg",
-            "json_file": "1898_dw.json",
+            "json_file": "1898.json",
             "features": "feature_points_with_annotations.csv",
             "camera_locations": "potential_camera_locations.csv",
             "pixel_x": "Pixel_x_1898.jpg",
