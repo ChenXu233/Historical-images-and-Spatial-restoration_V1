@@ -224,7 +224,7 @@ def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ra
             symbol = rec['symbol']
             pixel = rec['pixel']
             if pixel[0] != 0 or pixel[1] != 0:
-                plt.text(pixel[0] + 10, pixel[1] - 5, symbol, color='red', fontsize=24, weight='bold')
+                plt.text(pixel[0] + 10, pixel[1] - 5, symbol, color='red', fontsize=32, weight='bold')
     err1 = 0
     err2 = 0
     feature = ['id', 'symbol', 'name', 'x', 'y', 'pixel_x', 'pixel_y', 'calc_pixel_x', 'calc_pixel_y']
@@ -249,9 +249,9 @@ def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ra
             err2 += np.linalg.norm(P2 - PP2[0:2])
         if show:
             color = 'green' if mask[i] == 1 else 'purple'
-            plt.plot([p1[0], pp2[0]], [p1[1], pp2[1]], color='red', linewidth=2, zorder=3)
-            plt.plot(p1[0], p1[1], marker='X', color=color, markersize=12, zorder=2)
-            plt.plot(pp2[0], pp2[1], marker='o', color=color, markersize=12, zorder=2)
+            plt.plot([p1[0], pp2[0]], [p1[1], pp2[1]], color='red', linewidth=4, zorder=3)
+            plt.plot(p1[0], p1[1], marker='X', color=color, markersize=18, zorder=2)
+            plt.plot(pp2[0], pp2[1], marker='o', color=color, markersize=18, zorder=2)
             sym = ''
             name = ''
             for r in recs:
@@ -281,7 +281,7 @@ def find_homography(recs, pixels, pos3ds, symbols, camera_location, im, show, ra
                 csvWriter.writerow(r)
 
         print('Output image file: ', outputfile)
-        plt.savefig(outputfile.replace(".jpg", "_output.png"), dpi=300, bbox_inches='tight')
+        plt.savefig(outputfile.replace(".jpg", "_1_output.png"), dpi=300, bbox_inches='tight')
         plt.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.05)  # 移除边距
         plt.tight_layout(pad=1.0)  # 冗余保险
         plt.show()
@@ -490,23 +490,28 @@ def process_features(recs, dem_data, pixel_x, pixel_y, camera_location, features
 
 def plot_features_with_red_and_yellow(recs, dem_data, pixel_x, pixel_y, camera_location, features, image_path, outputfile, M):
     im = load_and_prepare_image(image_path)
-    plt.figure(figsize=(40,20))
+    img_height, img_width, _ = im.shape  # 获取图像的宽度和高度
+    plt.figure(figsize=(40, 20))
     plt.imshow(im)
 
     for rec in recs:
         symbol = rec['symbol']
         pixel = rec['pixel']
         if pixel[0] != 0 or pixel[1] != 0:
-            plt.text(pixel[0] + 7, pixel[1] - 4, symbol, color='red', fontsize=16)
-            plt.plot(pixel[0], pixel[1], marker='s', markersize=4, color='red')
+            plt.text(pixel[0] + 7, pixel[1] - 4, symbol, color='red', fontsize=32)
+            plt.plot(pixel[0], pixel[1], marker='s', markersize=8, color='red')
 
     features_list = process_features(recs, dem_data, pixel_x, pixel_y, camera_location, features, M)
     for symbol, pp2 in features_list:
-        print(f"读取点: Symbol={symbol}, 重投影后的像素坐标=({pp2[0]:.2f}, {pp2[1]:.2f})")
-        plt.text(pp2[0] + 7, pp2[1] - 4, symbol, color='yellow', fontsize=16, style='italic', weight='bold')
-        plt.plot(pp2[0], pp2[1], marker='s', markersize=4, color='yellow')
+        # 检查重投影后的像素坐标是否在图像范围内
+        if 0 <= pp2[0] < img_width and 0 <= pp2[1] < img_height:
+            print(f"读取点: Symbol={symbol}, 重投影后的像素坐标=({pp2[0]:.2f}, {pp2[1]:.2f})")
+            plt.text(pp2[0] + 7, pp2[1] - 4, symbol, color='yellow', fontsize=32)
+            plt.plot(pp2[0], pp2[1], marker='s', markersize=8, color='yellow')
+        else:
+            print(f"跳过点: Symbol={symbol}, 重投影后的像素坐标=({pp2[0]:.2f}, {pp2[1]:.2f}) 超出图像范围")
 
-    plt.savefig(outputfile.replace(".jpg", "_red_and_black_output.png"), dpi=300, bbox_inches='tight')
+    plt.savefig(outputfile.replace(".jpg", "_2_output.png"), dpi=300, bbox_inches='tight')
     plt.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.05)  # 移除边距
     plt.tight_layout(pad=1.0)  # 冗余保险
     plt.show()
@@ -549,10 +554,10 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
 
     best_M, best_mask = homographies[min_idx]
 
-    # 调用新增的第一个函数生成红色和黑色特征点图像
+    # 调用新增的第一个函数生成红色和黄色特征点图像
     plot_features_with_red_and_yellow(recs, dem_data, pixel_x, pixel_y, locations[min_idx]['pos3d'], features, image_path, output, best_M)
 
-    # 调用find_homography函数内部的绘制功能生成绿色和红色特征点图像
+    # 调用find_homography函数内部的绘制功能生成绿色和紫色特征点图像
     find_homography(recs, pixels, pos3ds, symbols, locations[min_idx]['pos3d'], im, True, 70.0, output, pixel_x, pixel_y, scale, dem_data, features)
 
 def main():
