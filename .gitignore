@@ -1,0 +1,17 @@
+.py[cod]
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pdm-python
+debug.log
+dem_dx.tif
+feature_points_with_annotations.csv
+potential_camera_locations.csv
+zOutput_1898_1_output.png
+zOutput_1898_2_output.png
+zOutput_1898_accuracies.csv
+zOutput_1898_correlations.csv
+zOutput_1898_location.csv
+historical photos/1898.jpg
+historical photos/标注版.jpg

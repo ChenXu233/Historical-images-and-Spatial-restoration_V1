@@ -23,14 +23,20 @@ import re
 import random
 
 # 设置字体
-plt.rcParams['font.sans-serif'] = ['SimHei']  # 使用黑体
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
+plt.rcParams["font.sans-serif"] = ["SimHei"]  # 使用黑体
+plt.rcParams["axes.unicode_minus"] = False  # 解决负号 '-' 显示为方块的问题
 
 # 验证字体是否存在
-font_path = font_manager.findSystemFonts(fontpaths=None, fontext='ttf')
+font_path = font_manager.findSystemFonts(fontpaths=None, fontext="ttf")
 
 # 设置日志记录
-logging.basicConfig(level=logging.DEBUG, filename='debug.log', filemode='w', format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG,
+    filename="debug.log",
+    filemode="w",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
 
 # 坐标系统统一化
 class GeoCoordTransformer:
@@ -42,21 +48,25 @@ class GeoCoordTransformer:
         try:
             easting, northing = self.to_utm.transform(lon, lat)
             if np.isinf(easting) or np.isinf(northing):
-                raise ValueError('Invalid UTM coordinates')
+                raise ValueError("Invalid UTM coordinates")
             return easting, northing
         except Exception as e:
             raise
 
     def utm_to_wgs84(self, easting, northing):
         try:
-            lon, lat = self.to_wgs84.transform(easting, northing)  # 注意顺序：先经度，后纬度
+            lon, lat = self.to_wgs84.transform(
+                easting, northing
+            )  # 注意顺序：先经度，后纬度
             if np.isinf(lat) or np.isinf(lon):
-                raise ValueError('Invalid WGS84 coordinates')
+                raise ValueError("Invalid WGS84 coordinates")
             return lon, lat
         except Exception as e:
             raise
 
+
 geo_transformer = GeoCoordTransformer()
+
 
 # 加载DEM数据
 def load_dem_data(dem_file):
@@ -74,7 +84,7 @@ def load_dem_data(dem_file):
         (dem_x.min(), dem_y.min()),
         (dem_x.min(), dem_y.max()),
         (dem_x.max(), dem_y.min()),
-        (dem_x.max(), dem_y.max())
+        (dem_x.max(), dem_y.max()),
     ]
     utm_x_list = []
     utm_y_list = []
@@ -90,16 +100,19 @@ def load_dem_data(dem_file):
 
     dem_interpolator = RegularGridInterpolator((dem_y, dem_x), dem_array)
     dem_data = {
-        'interpolator': dem_interpolator,
-        'x_range': (dem_x.min(), dem_x.max()),
-        'y_range': (dem_y.min(), dem_y.max()),
-        'utm_x_range': dem_utm_x_range,
-        'utm_y_range': dem_utm_y_range,
-        'data': dem_array
+        "interpolator": dem_interpolator,
+        "x_range": (dem_x.min(), dem_x.max()),
+        "y_range": (dem_y.min(), dem_y.max()),
+        "utm_x_range": dem_utm_x_range,
+        "utm_y_range": dem_utm_y_range,
+        "data": dem_array,
     }
     logging.debug(f"DEM 范围: 经度 {dem_data['x_range']}, 纬度 {dem_data['y_range']}")
-    logging.debug(f"DEM UTM 范围: 东距 {dem_data['utm_x_range']}, 北距 {dem_data['utm_y_range']}")
+    logging.debug(
+        f"DEM UTM 范围: 东距 {dem_data['utm_x_range']}, 北距 {dem_data['utm_y_range']}"
+    )
     return dem_data
+
 
 # 使用PnP算法进行相机姿态估计
 def estimate_camera_pose(pos3d, pixels, K):
@@ -108,48 +121,57 @@ def estimate_camera_pose(pos3d, pixels, K):
     K = np.asarray(K, dtype=np.float64).reshape(3, 3)
     dist_coeffs = np.zeros((4, 1), dtype=np.float64)
 
-
     print("Camera matrix K:\n", K)
 
     # 可视化3D点
     fig = plt.figure()
-    ax = fig.add_subplot(121, projection='3d')
-    ax.scatter(pos3d[:, 0], pos3d[:, 1], pos3d[:, 2], c='r', marker='o')
-    ax.set_title('3D Points')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
+    ax = fig.add_subplot(121, projection="3d")
+    ax.scatter(pos3d[:, 0], pos3d[:, 1], pos3d[:, 2], c="r", marker="o")
+    ax.set_title("3D Points")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
 
     # 可视化2D点
     ax2 = fig.add_subplot(122)
-    ax2.scatter(pixels[:, 0], pixels[:, 1], c='b', marker='x')
-    ax2.set_title('2D Points')
-    ax2.set_xlabel('Pixel X')
-    ax2.set_ylabel('Pixel Y')
+    ax2.scatter(pixels[:, 0], pixels[:, 1], c="b", marker="x")
+    ax2.set_title("2D Points")
+    ax2.set_xlabel("Pixel X")
+    ax2.set_ylabel("Pixel Y")
     ax2.invert_yaxis()  # 图像坐标系的Y轴是向下的
 
     plt.show()
 
     # 使用PnP算法估计旋转向量和平移向量，并返回内点
     success, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(
-        pos3d, pixels, K, dist_coeffs,
+        pos3d,
+        pixels,
+        K,
+        dist_coeffs,
         iterationsCount=5000,
         reprojectionError=50.0,
-        confidence=0.99
+        confidence=0.99,
     )
     print("Inliers:\n", inliers)
     if not success or inliers is None or len(inliers) < 6:
         print("PnP RANSAC failed or insufficient inliers.")
         return None, None, None
 
-    rotation_vector, translation_vector = cv2.solvePnPRefineLM(pos3d[inliers], pixels[inliers], K, dist_coeffs,
-                                                               rotation_vector, translation_vector)
+    rotation_vector, translation_vector = cv2.solvePnPRefineLM(
+        pos3d[inliers],
+        pixels[inliers],
+        K,
+        dist_coeffs,
+        rotation_vector,
+        translation_vector,
+    )
     print(f"Rotation Vector (R):\n{rotation_vector}")
     print(f"Translation Vector (T):\n{translation_vector}")
     return rotation_vector, translation_vector, inliers
 
+
 # 获取DEM数据中的海拔值
-def get_dem_elevation(dem_data, coord, coord_type='utm'):
+def get_dem_elevation(dem_data, coord, coord_type="utm"):
     """
     根据坐标类型获取 DEM 高程。
     :param dem_data: DEM 数据
@@ -157,16 +179,17 @@ def get_dem_elevation(dem_data, coord, coord_type='utm'):
     :param coord_type: 坐标类型，'utm' 或 'wgs84'
     :return: 海拔高度
     """
-    if coord_type == 'utm':
+    if coord_type == "utm":
         lon, lat = geo_transformer.utm_to_wgs84(coord[0], coord[1])
-    elif coord_type == 'wgs84':
+    elif coord_type == "wgs84":
         lon, lat = coord
     else:
         raise ValueError("Invalid coord_type. Must be 'utm' or 'wgs84'.")
 
     # 插值器构造时使用的坐标顺序为 (lat, lon)
-    dem_elev = dem_data['interpolator']((lat, lon))
+    dem_elev = dem_data["interpolator"]((lat, lon))
     return dem_elev
+
 
 # 将像素坐标转换为射线
 def pixel_to_ray(pixel_x, pixel_y, K, R, ray_origin):
@@ -201,13 +224,17 @@ def pixel_to_ray(pixel_x, pixel_y, K, R, ray_origin):
 
 def calculate_weights(input_pixel, control_points, max_weight=1, knn_weight=30):
     weights = []
-    input_pixel = np.array(input_pixel, dtype=np.float64)  # 确保 input_pixel 是浮点数类型
+    input_pixel = np.array(
+        input_pixel, dtype=np.float64
+    )  # 确保 input_pixel 是浮点数类型
     distances = []
     for cp in control_points:
-        pixel = np.array(cp['pixel'], dtype=np.float64)  # 确保 pixel 是浮点数类型
+        pixel = np.array(cp["pixel"], dtype=np.float64)  # 确保 pixel 是浮点数类型
         distance = np.linalg.norm(input_pixel - pixel)
         distances.append(distance)
-        weight = min(1.0 / distance if distance != 0 else 1.0, max_weight)  # 限制权重最大值
+        weight = min(
+            1.0 / distance if distance != 0 else 1.0, max_weight
+        )  # 限制权重最大值
         weights.append(weight)
 
     # 找到距离最近的控制点并提升其权重
@@ -216,7 +243,9 @@ def calculate_weights(input_pixel, control_points, max_weight=1, knn_weight=30):
 
     # 输出每个控制点的距离和权重信息
     for i, cp in enumerate(control_points):
-        logging.debug(f"【DEBUG】控制点 {cp['symbol']} 的距离: {distances[i]}, 权重: {weights[i]}")
+        logging.debug(
+            f"【DEBUG】控制点 {cp['symbol']} 的距离: {distances[i]}, 权重: {weights[i]}"
+        )
 
     return np.array(weights)
 
@@ -224,26 +253,34 @@ def calculate_weights(input_pixel, control_points, max_weight=1, knn_weight=30):
 def compute_optimization_factors(control_points, K, R, ray_origin):
     optimization_factors = []
     for cp in control_points:
-        true_geo = np.array(cp['pos3d'], dtype=np.float64)
+        true_geo = np.array(cp["pos3d"], dtype=np.float64)
         ideal_direction = true_geo - ray_origin
         print(f"【DEBUG】归一化前的理想UTM射线方向: {ideal_direction}")
         norm_ideal = np.linalg.norm(ideal_direction)
         if norm_ideal == 0:
             continue
         ideal_direction /= norm_ideal
-        _, computed_ray = pixel_to_ray(cp['pixel'][0], cp['pixel'][1], K, R, ray_origin)
+        _, computed_ray = pixel_to_ray(cp["pixel"][0], cp["pixel"][1], K, R, ray_origin)
         computed_ray /= np.linalg.norm(computed_ray)
         optimization_factor_x = ideal_direction[0] / computed_ray[0]
         optimization_factor_y = ideal_direction[1] / computed_ray[1]
         optimization_factor_z = ideal_direction[2] / computed_ray[2]
 
-
-        optimization_factors.append((optimization_factor_x, optimization_factor_y, optimization_factor_z))
-        cp['factors'] = (optimization_factor_x, optimization_factor_y, optimization_factor_z)  # 保存优化因子到控制点
+        optimization_factors.append(
+            (optimization_factor_x, optimization_factor_y, optimization_factor_z)
+        )
+        cp["factors"] = (
+            optimization_factor_x,
+            optimization_factor_y,
+            optimization_factor_z,
+        )  # 保存优化因子到控制点
         print(f"【DEBUG】控制点 {cp['symbol']} 的理想UTM射线方向: {ideal_direction}")
         print(f"【DEBUG】像素射线方向: {computed_ray}")
-        print(f"【DEBUG】控制点 {cp['symbol']} 的优化因子: ({optimization_factor_x}, {optimization_factor_y}, {optimization_factor_z})")
+        print(
+            f"【DEBUG】控制点 {cp['symbol']} 的优化因子: ({optimization_factor_x}, {optimization_factor_y}, {optimization_factor_z})"
+        )
     return optimization_factors
+
 
 def weighted_average_optimization_factors(factors, weights):
     # 将权重归一化
@@ -252,24 +289,31 @@ def weighted_average_optimization_factors(factors, weights):
     weighted_factors = np.average(factors, axis=0, weights=normalized_weights)
     return weighted_factors
 
+
 # 计算射线与DEM的交点
-def ray_intersect_dem(ray_origin, ray_direction, dem_data, max_search_dist=5000, step=1):
+def ray_intersect_dem(
+    ray_origin, ray_direction, dem_data, max_search_dist=5000, step=1
+):
     current_pos = np.array(ray_origin, dtype=np.float64)
     step_count = 0  # 初始化步进计数器
     for _ in range(int(max_search_dist / step)):
-        logging.debug(f"【DEBUG】当前UTM坐标: {current_pos}, 当前射线方向: {ray_direction}")
+        logging.debug(
+            f"【DEBUG】当前UTM坐标: {current_pos}, 当前射线方向: {ray_direction}"
+        )
         current_easting = current_pos[0]
         current_northing = current_pos[1]
         lon, lat = geo_transformer.utm_to_wgs84(current_easting, current_northing)
         try:
-            dem_elev = dem_data['interpolator']((lat, lon))
+            dem_elev = dem_data["interpolator"]((lat, lon))
         except Exception as e:
             logging.error(f"【错误】插值时出错: {e}")
             return None, step_count
         logging.debug(f"【DEBUG】DEM海拔: {dem_elev}, 当前高度: {current_pos[2]}")
 
         if step_count >= 50 and current_pos[2] <= dem_elev + 0.5:
-            return np.array([current_easting, current_northing, current_pos[2]]), step_count
+            return np.array(
+                [current_easting, current_northing, current_pos[2]]
+            ), step_count
 
         current_pos[0] += step * ray_direction[0]
         current_pos[1] += step * ray_direction[1]
@@ -278,40 +322,54 @@ def ray_intersect_dem(ray_origin, ray_direction, dem_data, max_search_dist=5000,
 
     return None, step_count
 
+
 # 输入像素坐标，输出地理坐标
-def pixel_to_geo(pixel_coord, K, R, ray_origin, dem_data, control_points, optimization_factors):
+def pixel_to_geo(
+    pixel_coord, K, R, ray_origin, dem_data, control_points, optimization_factors
+):
     # 计算权重
     weights = calculate_weights(pixel_coord, control_points)
     # 计算加权优化因子
-    weighted_optimization_factors = weighted_average_optimization_factors(optimization_factors, weights)
+    weighted_optimization_factors = weighted_average_optimization_factors(
+        optimization_factors, weights
+    )
     print(f"【DEBUG】加权优化因子: {weighted_optimization_factors}")
     # 计算射线方向
-    ray_origin, ray_direction = pixel_to_ray(pixel_coord[0], pixel_coord[1], K, R, ray_origin)
+    ray_origin, ray_direction = pixel_to_ray(
+        pixel_coord[0], pixel_coord[1], K, R, ray_origin
+    )
     print(f"【DEBUG】初始射线方向: {ray_direction}")
     # 应用优化因子校正射线方向的Z分量
-    optimized_ray_direction = np.array([
-        ray_direction[0] * weighted_optimization_factors[0],
-        ray_direction[1] * weighted_optimization_factors[1],
-        ray_direction[2] * weighted_optimization_factors[2]
-    ])
+    optimized_ray_direction = np.array(
+        [
+            ray_direction[0] * weighted_optimization_factors[0],
+            ray_direction[1] * weighted_optimization_factors[1],
+            ray_direction[2] * weighted_optimization_factors[2],
+        ]
+    )
     print(f"【DEBUG】优化射线方向: {optimized_ray_direction}")
     # 归一化校正后的射线方向
-    final_ray_direction = optimized_ray_direction / np.linalg.norm(optimized_ray_direction)
+    final_ray_direction = optimized_ray_direction / np.linalg.norm(
+        optimized_ray_direction
+    )
     print(f"【DEBUG】最终射线方向: {final_ray_direction}")
     # 计算射线与DEM的交点
-    geo_coord, total_steps = ray_intersect_dem(ray_origin, final_ray_direction, dem_data)
+    geo_coord, total_steps = ray_intersect_dem(
+        ray_origin, final_ray_direction, dem_data
+    )
     print(f"【DEBUG】地理坐标: {geo_coord}")
     print(f"【DEBUG】射线步进总步数: {total_steps}")
 
     return geo_coord, total_steps
+
 
 # **********
 # read data from the features file
 # **********
 def read_points_data(filename, pixel_x, pixel_y, scale):
     geo_transformer = GeoCoordTransformer()
-    with open(filename, encoding='utf-8') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
+    with open(filename, encoding="utf-8") as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=",")
         line_count = 0
         recs = []
         pixels = []
@@ -336,89 +394,131 @@ def read_points_data(filename, pixel_x, pixel_y, scale):
 
                 easting, northing = geo_transformer.wgs84_to_utm(longitude, latitude)
                 pos3d = np.array([easting, northing, elevation])
-                print(f"Processed Point - Symbol: {symbol}, Name: {name}, Pixel: {pixel}, Lon: {longitude}, Lat: {latitude}, Easting: {easting}, Northing: {northing}, Elevation: {elevation}")
-                rec = {'symbol': symbol, 'pixel': pixel, 'pos3d': pos3d}
+                print(
+                    f"Processed Point - Symbol: {symbol}, Name: {name}, Pixel: {pixel}, Lon: {longitude}, Lat: {latitude}, Easting: {easting}, Northing: {northing}, Elevation: {elevation}"
+                )
+                rec = {"symbol": symbol, "pixel": pixel, "pos3d": pos3d}
                 recs.append(rec)
         return recs
 
+
 # 将边界像素坐标转换为地理坐标
-def convert_boundary_to_geo(json_data, K, R, ray_origin, dem_data, control_points, optimization_factors):
+def convert_boundary_to_geo(
+    json_data, K, R, ray_origin, dem_data, control_points, optimization_factors
+):
     boundary_points = {}
     boundary_geo_coords = {}
 
-    for obj in json_data['objects']:
-        group = obj['group']
-        category = re.sub(r'[^a-zA-Z0-9]', '', obj['category'])
+    for obj in json_data["objects"]:
+        group = obj["group"]
+        category = re.sub(r"[^a-zA-Z0-9]", "", obj["category"])
         key = (group, category)
 
         if key not in boundary_geo_coords:
             boundary_geo_coords[key] = []
             boundary_points[key] = []
 
-        boundary_points_obj = obj['segmentation']
+        boundary_points_obj = obj["segmentation"]
         for pixel_x, pixel_y in boundary_points_obj:
-            geo_coord, _ = pixel_to_geo([pixel_x, pixel_y], K, R, ray_origin, dem_data, control_points, optimization_factors)
+            geo_coord, _ = pixel_to_geo(
+                [pixel_x, pixel_y],
+                K,
+                R,
+                ray_origin,
+                dem_data,
+                control_points,
+                optimization_factors,
+            )
             if geo_coord is not None:
                 boundary_geo_coords[key].append(geo_coord)
                 boundary_points[key].append((pixel_x, pixel_y))
 
     return boundary_geo_coords, boundary_points
 
+
 # 生成csv
-def save_boundary_to_csv(boundary_geo_coords, boundary_points, csv_file='boundary_points_geo.csv'):
+def save_boundary_to_csv(
+    boundary_geo_coords, boundary_points, csv_file="boundary_points_geo.csv"
+):
     csv_data = []
 
     for (group, category), coords in boundary_geo_coords.items():
         for i, coord in enumerate(coords):
             if len(coord) < 3:
-                logging.error(f"Invalid coordinate {coord} for category {category} and group {group}")
+                logging.error(
+                    f"Invalid coordinate {coord} for category {category} and group {group}"
+                )
                 continue
             pixel_x, pixel_y = boundary_points[(group, category)][i]
-            csv_data.append([category, group, pixel_x, pixel_y, coord[0], coord[1], coord[2]])
+            csv_data.append(
+                [category, group, pixel_x, pixel_y, coord[0], coord[1], coord[2]]
+            )
 
-    with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(['category', 'group', 'pixel_x', 'pixel_y', 'geo_x', 'geo_y', 'geo_z'])
+        writer.writerow(
+            ["category", "group", "pixel_x", "pixel_y", "geo_x", "geo_y", "geo_z"]
+        )
         writer.writerows(csv_data)
 
     print(f"CSV文件已保存到 {csv_file}")
 
+
 # 生成shp
 def save_boundary_to_shapefiles(boundary_geo_coords, json_data, output_dir):
-    name = json_data['info']['name']
+    name = json_data["info"]["name"]
 
     for (group, category), group_coords in boundary_geo_coords.items():
         if len(group_coords) < 3:
-            print(f"Group {group}, Category {category} 边界点数量少于3个，生成Polygon失败")
+            print(
+                f"Group {group}, Category {category} 边界点数量少于3个，生成Polygon失败"
+            )
             continue
 
-        group_coords = [(coord[0], coord[1]) for coord in group_coords if len(coord) >= 2]
+        group_coords = [
+            (coord[0], coord[1]) for coord in group_coords if len(coord) >= 2
+        ]
 
         attributes = []
         geometry = []
 
         polygon = Polygon(group_coords)
         geometry.append(polygon)
-        attributes.append({
-            'group': group,
-            'name': name,
-            'category': category,
-            'area': polygon.area,
-            'perimeter': polygon.length,
-        })
+        attributes.append(
+            {
+                "group": group,
+                "name": name,
+                "category": category,
+                "area": polygon.area,
+                "perimeter": polygon.length,
+            }
+        )
 
         gdf = gpd.GeoDataFrame(attributes, geometry=geometry)
         gdf.set_crs(epsg=32650, inplace=True)
 
-        sanitized_category = re.sub(r'[^a-zA-Z0-9]', '', category)
-        output_shp_file = os.path.join(output_dir, f"{sanitized_category}_{group}_boundary.shp")
-        gdf.to_file(output_shp_file, driver='ESRI Shapefile')
+        sanitized_category = re.sub(r"[^a-zA-Z0-9]", "", category)
+        output_shp_file = os.path.join(
+            output_dir, f"{sanitized_category}_{group}_boundary.shp"
+        )
+        gdf.to_file(output_shp_file, driver="ESRI Shapefile")
         print(f"Shapefile已保存到 {output_shp_file}")
+
 
 # **********
 # Main function
 # **********
-def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, output, scale, dem_file):
+def do_it(
+    image_name,
+    json_file,
+    features,
+    camera_locations,
+    pixel_x,
+    pixel_y,
+    output,
+    scale,
+    dem_file,
+):
     # 确保工作目录为脚本所在目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
@@ -454,13 +554,11 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
     fx = focal_length_mm / sensor_width_mm * width
     fy = focal_length_mm / sensor_height_mm * height
 
-    K = np.array([[fx, 0, cx],
-                  [0, fy, cy],
-                  [0, 0, 1]], dtype=np.float64)
+    K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
 
     # 使用PnP算法估计 R 和 T，得到的相机位置camera_origin为UTM数据
-    pos3d = np.array([rec['pos3d'] for rec in recs])
-    pixels = np.array([rec['pixel'] for rec in recs])
+    pos3d = np.array([rec["pos3d"] for rec in recs])
+    pixels = np.array([rec["pixel"] for rec in recs])
     R, t, inliers = estimate_camera_pose(pos3d, pixels, K)
     if R is None or t is None:
         print("Failed to estimate camera pose using PnP.")
@@ -471,10 +569,10 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
     # 使用所有 pos3d 中的点作为控制点
     control_points = [
         {
-            'pixel': recs[idx]['pixel'],
-            'pos3d': recs[idx]['pos3d'],
-            'dem_data': dem_data,
-            'symbol': recs[idx]['symbol']
+            "pixel": recs[idx]["pixel"],
+            "pos3d": recs[idx]["pos3d"],
+            "dem_data": dem_data,
+            "symbol": recs[idx]["symbol"],
         }
         for idx in range(len(recs))
     ]
@@ -484,8 +582,10 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
     print(f"【DEBUG】PnP求解的相机位置 (UTM): {camera_origin}")
 
     # 修正相机位置海拔
-    dem_elev = get_dem_elevation(dem_data,  camera_origin, coord_type='utm')
-    corrected_camera_origin = np.array([camera_origin[0], camera_origin[1], dem_elev + 1.5 ])
+    dem_elev = get_dem_elevation(dem_data, camera_origin, coord_type="utm")
+    corrected_camera_origin = np.array(
+        [camera_origin[0], camera_origin[1], dem_elev + 1.5]
+    )
 
     # 直接使用修正后的camera_origin作为ray_origin
     ray_origin = corrected_camera_origin
@@ -493,24 +593,32 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
 
     # 校验相机位置是否在 DEM 的 UTM 覆盖范围内，直接使用 dem_data 中的 utm_x_range 和 utm_y_range
     tol = 1e-5
-    utm_x_range = dem_data['utm_x_range']
-    utm_y_range = dem_data['utm_y_range']
-    if not (utm_x_range[0] - tol <= camera_origin[0] <= utm_x_range[1] + tol and
-            utm_y_range[0] - tol <= camera_origin[1] <= utm_y_range[1] + tol):
+    utm_x_range = dem_data["utm_x_range"]
+    utm_y_range = dem_data["utm_y_range"]
+    if not (
+        utm_x_range[0] - tol <= camera_origin[0] <= utm_x_range[1] + tol
+        and utm_y_range[0] - tol <= camera_origin[1] <= utm_y_range[1] + tol
+    ):
         print(f"【错误】ray_origin {camera_origin} 超出 DEM 范围")
         print(f"【DEBUG】DEM 范围 (UTM): 经度 {utm_x_range}, 纬度 {utm_y_range}")
         return
 
     # 计算每个控制点的优化因子
-    optimization_factors = compute_optimization_factors(control_points, K, R, ray_origin)
+    optimization_factors = compute_optimization_factors(
+        control_points, K, R, ray_origin
+    )
 
     while True:
         try:
-            input_pixel_str = input("请输入像素坐标 (x, y) 或输入 'exit' 退出: ").strip()
-            if input_pixel_str.lower() == 'exit':
+            input_pixel_str = input(
+                "请输入像素坐标 (x, y) 或输入 'exit' 退出: "
+            ).strip()
+            if input_pixel_str.lower() == "exit":
                 break
 
-            pixel_values = input_pixel_str.replace(" ", "").replace("，", ",").split(",")
+            pixel_values = (
+                input_pixel_str.replace(" ", "").replace("，", ",").split(",")
+            )
             if len(pixel_values) != 2:
                 print("输入格式错误，例：755,975")
                 continue
@@ -518,13 +626,25 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
             input_pixel_x, input_pixel_y = map(float, pixel_values)
             input_pixel = [input_pixel_x, input_pixel_y]  # 使用输入的像素坐标
 
-            geo_coord, total_steps = pixel_to_geo(input_pixel, K, R, ray_origin, dem_data, control_points, optimization_factors)
+            geo_coord, total_steps = pixel_to_geo(
+                input_pixel,
+                K,
+                R,
+                ray_origin,
+                dem_data,
+                control_points,
+                optimization_factors,
+            )
             if geo_coord is not None:
                 print(f"像素坐标 ({input_pixel_x}, {input_pixel_y}) 对应的UTM地理坐标:")
-                print(f"Easting: {geo_coord[0]:.2f}, Northing: {geo_coord[1]:.2f}, 高度: {geo_coord[2]:.2f}")
+                print(
+                    f"Easting: {geo_coord[0]:.2f}, Northing: {geo_coord[1]:.2f}, 高度: {geo_coord[2]:.2f}"
+                )
                 print(f"射线步进总步数: {total_steps}")
             else:
-                print(f"无法找到 ({input_pixel_x, input_pixel_y}) 对应的地理坐标，请检查输入或 DEM 数据。")
+                print(
+                    f"无法找到 ({input_pixel_x, input_pixel_y}) 对应的地理坐标，请检查输入或 DEM 数据。"
+                )
 
         except ValueError as e:
             print(f"输入格式错误: {e}")
@@ -532,11 +652,13 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
             print(f"发生未知错误: {e}")
 
     # 读取JSON文件
-    with open(json_file, 'r', encoding='utf-8') as f:
+    with open(json_file, "r", encoding="utf-8") as f:
         json_data = json.load(f)
 
     # 将边界点转换为地理坐标
-    boundary_geo_coords, boundary_points = convert_boundary_to_geo(json_data, K, R, ray_origin, dem_data, control_points, optimization_factors)
+    boundary_geo_coords, boundary_points = convert_boundary_to_geo(
+        json_data, K, R, ray_origin, dem_data, control_points, optimization_factors
+    )
 
     # 保存为csv
     save_boundary_to_csv(boundary_geo_coords, boundary_points)
@@ -548,6 +670,7 @@ def do_it(image_name, json_file, features, camera_locations, pixel_x, pixel_y, o
 
     # 保存为Shapefile
     save_boundary_to_shapefiles(boundary_geo_coords, json_data, output_shapefiles_dir)
+
 
 # 主函数处理多个图像
 def main():
@@ -561,78 +684,80 @@ def main():
             "pixel_y": "Pixel_y_1898.jpg",
             "output": "zOutput_1898.jpg",
             "scale": 1.0,
-            "dem_file": "dem_dx.tif"
+            "dem_file": "dem_dx.tif",
         },
-        {
-            "image_name": "1900-1910.jpg",
-            "json_file": "1900-1910.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_1900-1910.jpg",
-            "pixel_y": "Pixel_y_1900-1910.jpg",
-            "output": "zOutput_1900-1910.jpg",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        },
-        {
-            "image_name": "1910.jpg",
-            "json_file": "1910.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_1910.jpg",
-            "pixel_y": "Pixel_y_1910.jpg",
-            "output": "zOutput_1910.jpg",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        },
-        {
-            "image_name": "1920-1930.jpg",
-            "json_file": "1920-1930.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_1920-1930.jpg",
-            "pixel_y": "Pixel_y_1920-1930.jpg",
-            "output": "zOutput_1920-1930.jpg",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        },
-        {
-            "image_name": "1925-1930.jpg",
-            "json_file": "1925-1930.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_1925-1930.jpg",
-            "pixel_y": "Pixel_y_1925-1930.jpg",
-            "output": "zOutput_1925-1930.jpg",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        },
-        {
-            "image_name": "Kuliang.jpg",
-            "json_file": "Kuliang.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_Kuliang.jpg",
-            "pixel_y": "Pixel_y_Kuliang.jpg",
-            "output": "zOutput_Kuliang.jpg",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        },
-        {
-            "image_name": "Siems Siemssen.jpg",
-            "json_file": "Siems Siemssen.json",
-            "features": "feature_points_with_annotations.csv",
-            "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_Siems Siemssen.jpg",
-            "pixel_y": "Pixel_y_Siems Siemssen.jpg",
-            "output": "zOutput_Siems Siemssen.jpg",
-            "scale": 1.0,
-            "dem_file": "dem_dx.tif"
-        }
+        # {
+        #     "image_name": "1900-1910.jpg",
+        #     "json_file": "1900-1910.json",
+        #     "features": "feature_points_with_annotations.csv",
+        #     "camera_locations": "potential_camera_locations.csv",
+        #     "pixel_x": "Pixel_x_1900-1910.jpg",
+        #     "pixel_y": "Pixel_y_1900-1910.jpg",
+        #     "output": "zOutput_1900-1910.jpg",
+        #     "scale": 1.0,
+        #     "dem_file": "dem_dx.tif"
+        # },
+        # {
+        #     "image_name": "1910.jpg",
+        #     "json_file": "1910.json",
+        #     "features": "feature_points_with_annotations.csv",
+        #     "camera_locations": "potential_camera_locations.csv",
+        #     "pixel_x": "Pixel_x_1910.jpg",
+        #     "pixel_y": "Pixel_y_1910.jpg",
+        #     "output": "zOutput_1910.jpg",
+        #     "scale": 1.0,
+        #     "dem_file": "dem_dx.tif"
+        # },
+        # {
+        #     "image_name": "1920-1930.jpg",
+        #     "json_file": "1920-1930.json",
+        #     "features": "feature_points_with_annotations.csv",
+        #     "camera_locations": "potential_camera_locations.csv",
+        #     "pixel_x": "Pixel_x_1920-1930.jpg",
+        #     "pixel_y": "Pixel_y_1920-1930.jpg",
+        #     "output": "zOutput_1920-1930.jpg",
+        #     "scale": 1.0,
+        #     "dem_file": "dem_dx.tif"
+        # },
+        # {
+        #     "image_name": "1925-1930.jpg",
+        #     "json_file": "1925-1930.json",
+        #     "features": "feature_points_with_annotations.csv",
+        #     "camera_locations": "potential_camera_locations.csv",
+        #     "pixel_x": "Pixel_x_1925-1930.jpg",
+        #     "pixel_y": "Pixel_y_1925-1930.jpg",
+        #     "output": "zOutput_1925-1930.jpg",
+        #     "scale": 1.0,
+        #     "dem_file": "dem_dx.tif"
+        # },
+        # {
+        #     "image_name": "Kuliang.jpg",
+        #     "json_file": "Kuliang.json",
+        #     "features": "feature_points_with_annotations.csv",
+        #     "camera_locations": "potential_camera_locations.csv",
+        #     "pixel_x": "Pixel_x_Kuliang.jpg",
+        #     "pixel_y": "Pixel_y_Kuliang.jpg",
+        #     "output": "zOutput_Kuliang.jpg",
+        #     "scale": 1.0,
+        #     "dem_file": "dem_dx.tif"
+        # },
+        # {
+        #     "image_name": "Siems Siemssen.jpg",
+        #     "json_file": "Siems Siemssen.json",
+        #     "features": "feature_points_with_annotations.csv",
+        #     "camera_locations": "potential_camera_locations.csv",
+        #     "pixel_x": "Pixel_x_Siems Siemssen.jpg",
+        #     "pixel_y": "Pixel_y_Siems Siemssen.jpg",
+        #     "output": "zOutput_Siems Siemssen.jpg",
+        #     "scale": 1.0,
+        #     "dem_file": "dem_dx.tif"
+        # }
     ]
 
     # 指定要处理的图像信息
-    target_info = images_info[0]  # 修改此索引以选择要处理的图像，例如 0 表示处理第一个图像
+    target_info = images_info[
+        0
+    ]  # 修改此索引以选择要处理的图像，例如 0 表示处理第一个图像
 
     do_it(
         target_info["image_name"],
@@ -643,13 +768,14 @@ def main():
         target_info["pixel_y"],
         target_info["output"],
         target_info["scale"],
-        target_info["dem_file"]
+        target_info["dem_file"],
     )
+
 
 if __name__ == "__main__":
     main()
 
-print('**********************')
+print("**********************")
 # print ('ret: ')
 # print (ret)
 # print ('mtx: ')
@@ -661,4 +787,4 @@ print('**********************')
 # print ('tvecs: ')
 # print(tvecs)
 
-print('Done!')
+print("Done!")
