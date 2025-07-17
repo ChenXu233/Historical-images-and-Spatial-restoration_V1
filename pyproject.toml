@@ -15,6 +15,7 @@ dependencies = [
     "rasterio>=1.4.3",
     "trimesh>=4.6.10",
     "tk>=0.1.0",
+    "pydantic>=2.11.7",
 ]
 requires-python = ">=3.10"
 readme = "README.md"

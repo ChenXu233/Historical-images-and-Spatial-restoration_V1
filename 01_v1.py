@@ -4,23 +4,13 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
-from mpl_toolkits.mplot3d import Axes3D
 import csv
-import glob
 import math
 import logging
 from pyproj import Transformer
-from scipy.spatial import distance
-import seaborn as sns
 from scipy.interpolate import RegularGridInterpolator
-from scipy.spatial import Delaunay
 from osgeo import gdal
-import json
-import geopandas as gpd
-from shapely.geometry import Polygon
 import os
-import re
-import random
 
 # 设置字体
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 使用黑体
@@ -69,6 +59,11 @@ geo_transformer = GeoCoordTransformer()
 
 
 # **********
+"""
+计算特征之间的真实距离和像素距离
+"""
+
+
 # Calculate true and pixel distances between features
 # **********
 def correlate_features(features, depth_val):
@@ -231,9 +226,7 @@ def find_homographies(
     output,
     pixel_x,
     pixel_y,
-    scale,
     dem_data,
-    features,
 ):
     pixels = []
     pos3ds = []
@@ -272,9 +265,7 @@ def find_homographies(
                 output,
                 pixel_x,
                 pixel_y,
-                scale,
                 dem_data,
-                features,
             )
             num_matches[i, 0], num_matches[i, 1] = err1, err2
             homographies.append((M, mask))
@@ -319,9 +310,7 @@ def find_homography(
     outputfile,
     pixel_x,
     pixel_y,
-    scale,
     dem_data,
-    features,
 ):
     pixels = np.array(pixels)
     pos2 = np.zeros((len(pixels), 2))
@@ -721,7 +710,6 @@ def do_it(
     pixel_x,
     pixel_y,
     output,
-    scale,
     dem_file,
 ):
     # 确保工作目录为脚本所在目录
@@ -739,7 +727,7 @@ def do_it(
     # 加载DEM数据（DEM范围为UTM）
     dem_data = load_dem_data(dem_file)
 
-    recs = read_points_data(features, pixel_x, pixel_y, scale, dem_data)
+    recs = read_points_data(features, pixel_x, pixel_y, 1.0, dem_data)
     locations = read_camera_locations(camera_locations, dem_data)
 
     pixels = np.array([rec["pixel"] for rec in recs])
@@ -756,9 +744,7 @@ def do_it(
         output,
         pixel_x,
         pixel_y,
-        scale,
         dem_data,
-        features,
     )
     num_matches2 = num_matches12[:, 1]
     num_matches2[num_matches2 == 0] = 1000000
@@ -798,9 +784,7 @@ def do_it(
         output,
         pixel_x,
         pixel_y,
-        scale,
         dem_data,
-        features,
     )
 
 
@@ -811,8 +795,8 @@ def main():
             "json_file": "1898.json",
             "features": "feature_points_with_annotations.csv",
             "camera_locations": "potential_camera_locations.csv",
-            "pixel_x": "Pixel_x_1898.jpg",
-            "pixel_y": "Pixel_y_1898.jpg",
+            "pixel_x": "Pixel_x",
+            "pixel_y": "Pixel_y",
             "output": "zOutput_1898.jpg",
             "scale": 1.0,
             "dem_file": "dem_dx.tif",
@@ -898,7 +882,6 @@ def main():
         target_info["pixel_x"],
         target_info["pixel_y"],
         target_info["output"],
-        target_info["scale"],
         target_info["dem_file"],
     )
 
