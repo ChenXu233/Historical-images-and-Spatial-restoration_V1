@@ -1,13 +1,16 @@
 {
   "cSpell.words": [
+    "argmin",
     "fontext",
     "fontpaths",
     "homographies",
     "Homography",
     "levelname",
+    "linalg",
     "ndarray",
     "osgeo",
     "RANSAC",
-    "RANSACBOUND"
+    "RANSACBOUND",
+    "reprojection"
   ]
 }

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator
 from osgeo import gdal
 
-from typing import List
+from typing import List, Tuple, Dict, Optional
 
 ##
 from logger import logging
@@ -126,7 +126,7 @@ def get_features(feature_path: str) -> List[Feature]:
     return features
 
 
-def get_dem_elevation(dem_data: DEMData, coord: tuple, coord_type="utm"):
+def get_dem_elevation(dem_data: DEMData, coord, coord_type="utm"):
     """
     根据坐标类型获取 DEM 高程。
     :param dem_data: DEM 数据
