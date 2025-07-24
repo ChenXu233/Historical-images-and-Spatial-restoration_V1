@@ -107,7 +107,7 @@ def get_features(feature_path: str) -> List[Feature]:
     从 CSV 文件加载特征数据，并返回一个包含特征信息的列表。
     """
     features = []
-    with open(feature_path, "r", encoding="utf-8") as f:
+    with open(feature_path, "r", encoding="GBK") as f:
         reader = csv.DictReader(f)
         for row in reader:
             feature = {
