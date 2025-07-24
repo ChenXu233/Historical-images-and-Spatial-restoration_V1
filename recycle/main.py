@@ -30,7 +30,7 @@ plt.rcParams["axes.unicode_minus"] = False  # 解决负号 '-' 显示
 font_path = font_manager.findSystemFonts(fontpaths=None, fontext="ttf")
 
 
-RANSACBOUND = 70.0
+RANSACBOUND = 50.0
 
 
 # **********
@@ -168,23 +168,23 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
     # 读取相机位置数据
     camera_locations = read_camera_locations(camera_locations_path, dem_data)
 
-    num_matches12, homographies = find_homographies(point_data, camera_locations)
+    # num_matches12, homographies = find_homographies(point_data, camera_locations)
 
-    num_matches2 = num_matches12[:, 1]
-    num_matches2[num_matches2 == 0] = 1000000
-    min_idx = np.argmin(num_matches2)
-    print("Minimum average reprojection error:", np.min(num_matches2))
-    print("err1:", num_matches12[min_idx, 0])
-    print("err2:", num_matches12[min_idx, 1])
-    print(
-        f"推测相机位置: {camera_locations[min_idx].pos3d}, point_id: {min_idx + 1}, grid_code: {camera_locations[min_idx].grid_code}"
-    )
+    # num_matches2 = num_matches12[:, 1]
+    # num_matches2[num_matches2 == 0] = 1000000
+    # min_idx = np.argmin(num_matches2)
+    # print("Minimum average reprojection error:", np.min(num_matches2))
+    # print("err1:", num_matches12[min_idx, 0])
+    # print("err2:", num_matches12[min_idx, 1])
+    # print(
+    #     f"推测相机位置: {camera_locations[min_idx].pos3d}, point_id: {min_idx + 1}, grid_code: {camera_locations[min_idx].grid_code}"
+    # )
 
-    position = geo_transformer.utm_to_wgs84(
-        camera_locations[min_idx].pos3d[0], camera_locations[min_idx].pos3d[1]
-    )
+    # position = geo_transformer.utm_to_wgs84(
+    #     camera_locations[min_idx].pos3d[0], camera_locations[min_idx].pos3d[1]
+    # )
 
-    print(f"推测相机位置: {position}")
+    # print(f"推测相机位置: {position}")
 
     img_height, img_width, _ = im.shape  # 获取图像的宽度和高度
     plt.figure(figsize=(4, 2))
@@ -197,17 +197,19 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
             plt.text(pixel[0] + 7, pixel[1] - 4, symbol, color="red", fontsize=32)
             plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="red")
 
-    for i in features:
-        pixel = reprojection(
-            dem_data,
-            i.longitude,
-            i.latitude,
-            camera_locations[min_idx].pos3d,
-            homographies[min_idx][0],
-        )
-        plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="yellow")
+    # for i in features:
+    #     pixel = reprojection(
+    #         dem_data,
+    #         i.longitude,
+    #         i.latitude,
+    #         camera_locations[min_idx].pos3d,
+    #         homographies[min_idx][0],
+    #     )
+    #     plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="yellow")
 
-    initial_pos = camera_locations[3000].pos3d  # 初始最优位置
+    initial_pos = point_data[2].pos3d + 1
+
+    initial_pos = camera_locations[0].pos3d
 
     # ---------------- 新增优化逻辑 ----------------
     def error_function(camera_pos):
@@ -219,15 +221,45 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
             camera_location=camera_pos,
             ransacbound=RANSACBOUND,
         )
-        return err1
+        return err1 * 0.2 + err2 * 0.8
 
     result = minimize(
         fun=error_function,
-        x0=initial_pos,  # 初始值为原最优位置
+        x0=initial_pos,
+        method="BFGS",
+        options={
+            "disp": True,
+            "maxiter": 9000,
+            "xatol": 1e-10,
+        },
+        bounds=[(-np.inf, np.inf), (-np.inf, np.inf), (0, np.inf)],
+    )
+
+    step_size = 1000
+
+    initial_simplex = [
+        result.x,
+        result.x + [step_size, 0, 0],
+        result.x + [0, step_size, 0],
+        result.x + [0, 0, step_size],
+    ]
+
+    result = minimize(
+        fun=error_function,
+        x0=result.x,
         method="Powell",
-        bounds=None,  # 可选：添加相机位置的物理约束（如z≥DEM高度）
+        bounds=[(-np.inf, np.inf), (-np.inf, np.inf), (0, np.inf)],
         options={"disp": True, "maxiter": 9000},
     )
+
+    result = minimize(
+        fun=error_function,
+        x0=result.x,
+        method="Nelder-Mead",
+        options={"disp": True, "maxiter": 9000, "initial_simplex": initial_simplex},
+        bounds=[(-np.inf, np.inf), (-np.inf, np.inf), (0, np.inf)],
+    )
+
     optimized_pos = result.x  # 优化后的相机位置
     M, _, _, _ = find_homography(
         pixels=np.array([r.pixel for r in point_data]),
@@ -236,7 +268,7 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
         ransacbound=RANSACBOUND,
     )
 
-    print("原最优位置误差:", np.min(num_matches2))
+    # print("原最优位置误差:", np.min(num_matches2))
     print("优化后位置误差:", result.fun)
     print(f"优化后相机位置: {optimized_pos}")
 
