@@ -18,6 +18,7 @@ from utils import (
     read_camera_locations,
     read_points_data,
     get_dem_elevation,
+    reprojection,
 )
 from schema import CameraLocation, PointData
 from geo_transformer import geo_transformer
@@ -186,7 +187,7 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
     print(f"推测相机位置: {position}")
 
     img_height, img_width, _ = im.shape  # 获取图像的宽度和高度
-    plt.figure(figsize=(40, 20))
+    plt.figure(figsize=(4, 2))
     plt.imshow(im)
 
     for rec in point_data:
@@ -196,7 +197,15 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
             plt.text(pixel[0] + 7, pixel[1] - 4, symbol, color="red", fontsize=32)
             plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="red")
 
-    plt.show()
+    for i in features:
+        pixel = reprojection(
+            dem_data,
+            i.longitude,
+            i.latitude,
+            camera_locations[min_idx].pos3d,
+            homographies[min_idx][0],
+        )
+        plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="yellow")
 
     initial_pos = camera_locations[3000].pos3d  # 初始最优位置
 
@@ -210,24 +219,42 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
             camera_location=camera_pos,
             ransacbound=RANSACBOUND,
         )
-        return err1 + err2
+        return err1
 
-    # 使用L-BFGS算法优化（可根据需求替换为其他优化器）
     result = minimize(
         fun=error_function,
         x0=initial_pos,  # 初始值为原最优位置
-        method="Powell",  # 适用于连续可导问题，无导数可用Nelder-Mead
+        method="Powell",
         bounds=None,  # 可选：添加相机位置的物理约束（如z≥DEM高度）
-        options={"disp": True, "maxiter": 9000, "miniter": 3000},
+        options={"disp": True, "maxiter": 9000},
     )
     optimized_pos = result.x  # 优化后的相机位置
+    M, _, _, _ = find_homography(
+        pixels=np.array([r.pixel for r in point_data]),
+        pos3ds=np.array([r.pos3d for r in point_data]),
+        camera_location=optimized_pos,
+        ransacbound=RANSACBOUND,
+    )
+
     print("原最优位置误差:", np.min(num_matches2))
     print("优化后位置误差:", result.fun)
     print(f"优化后相机位置: {optimized_pos}")
 
+    for i in features:
+        pixel = reprojection(
+            dem_data,
+            i.longitude,
+            i.latitude,
+            optimized_pos,
+            M,
+        )
+        plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="blue")
+
     position = geo_transformer.utm_to_wgs84(optimized_pos[0], optimized_pos[1])
 
     print(f"推测相机位置: {position}")
+
+    plt.show()
 
 
 if __name__ == "__main__":

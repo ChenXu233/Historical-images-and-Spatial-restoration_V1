@@ -234,6 +234,26 @@ def read_points_data(
     return recs
 
 
+def reprojection(
+    dem_data: DEMData,
+    longitude,
+    latitude,
+    camera_location,
+    M,
+):
+    elevation = get_dem_elevation(dem_data, (longitude, latitude), coord_type="wgs84")
+    easting, northing = geo_transformer.wgs84_to_utm(longitude, latitude)
+    camera_easting, camera_northing, camera_elevation = camera_location
+    relative_easting = easting - camera_easting
+    relative_northing = northing - camera_northing
+    relative_elevation = elevation - camera_elevation
+    p = np.array([relative_elevation, relative_northing, relative_easting])
+    p = p / p[2]
+    pp2 = np.matmul(np.linalg.inv(M), p)
+    pp2 = pp2 / pp2[2]
+    return pp2
+
+
 # def correlate_features(features: List[Feature], depth_val: float) -> List[List]:
 #     result = [
 #         "id",
