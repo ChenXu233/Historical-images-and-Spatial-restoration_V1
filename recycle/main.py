@@ -244,23 +244,35 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
             camera_location=camera_pos,
             ransacbound=RANSACBOUND,
         )
-        return (err1 * 0.2 + err2 * 0.8) * 1000  # 调整权重以平衡err1和err2的影响
+        return err1
+
+    # ---------------- 优化初始点生成 ----------------
+    # 替换原随机采样为拉丁超立方采样
+    from scipy.stats import qmc  # 新增导入
 
     # 设置10公里搜索范围（10000米）
-    search_radius = 10000
-    # 生成10个初始点（包含原始点+9个随机点）
-    num_initial_points = 10
-    np.random.seed(42)  # 固定随机种子保证可复现
-    initial_points = [initial_pos]  # 初始点列表（第一个为原始点）
+    search_radius = 5000
 
-    # 生成随机初始点（在initial_pos周围±10km范围内）
-    for _ in range(num_initial_points - 1):
-        dx = np.random.uniform(-search_radius, search_radius)
-        dy = np.random.uniform(-search_radius, search_radius)
-        dz = np.random.uniform(0, search_radius / 10)  # Z轴不低于0
-        new_initial = initial_pos + np.array([dx, dy, dz])
-        new_initial[2] = max(new_initial[2], 0)  # 确保Z坐标有效
-        initial_points.append(new_initial)
+    num_initial_points = 10  # 可根据计算资源调整
+
+    # 定义搜索空间边界
+    bounds = [
+        (initial_pos[0] - search_radius, initial_pos[0] + search_radius),
+        (initial_pos[1] - search_radius, initial_pos[1] + search_radius),
+        (initial_pos[2] - search_radius / 10, initial_pos[2] + search_radius / 10),
+    ]
+
+    # 拉丁超立方采样生成初始点（包含原始点）
+    sampler = qmc.LatinHypercube(d=3)
+    sample = sampler.random(n=num_initial_points - 1)  # 生成n-1个随机点
+    initial_points = [initial_pos]  # 第一个点保留原始位置
+
+    # 将采样点映射到实际搜索空间
+    l_bounds = [b[0] for b in bounds]
+    u_bounds = [b[1] for b in bounds]
+    scaled_samples = qmc.scale(sample, l_bounds, u_bounds)  # shape: (n-1, 3)
+    for i in range(num_initial_points - 1):
+        initial_points.append(np.array(scaled_samples[i]))
 
     # 多初始点优化搜索
     best_result = None
@@ -268,50 +280,46 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
     bounds = [
         (initial_pos[0] - search_radius, initial_pos[0] + search_radius),
         (initial_pos[1] - search_radius, initial_pos[1] + search_radius),
-        (0, initial_pos[2] + search_radius),
+        (initial_pos[2] - search_radius / 10, initial_pos[2] + search_radius / 10),
     ]
 
     for idx, start_pos in enumerate(initial_points):
         print(f"\n===== 正在优化第 {idx + 1}/{num_initial_points} 个初始点 =====")
         print(f"初始点坐标: {start_pos}")
 
-        # 第一阶段：BFGS优化
-        result_bfgs = minimize(
-            fun=error_function,
-            x0=start_pos,
-            method="BFGS",
-            options={"disp": False, "maxiter": 3000},
+        # ---------------- 替换为全局+局部优化组合 ----------------
+        from scipy.optimize import differential_evolution  # 新增导入
+
+        best_result = None
+        best_error = np.inf
+
+        # 第一阶段：全局优化（差分进化算法）
+        print("===== 正在执行全局优化（差分进化） =====")
+        global_result = differential_evolution(
+            func=error_function,
+            bounds=bounds,
+            strategy="best1bin",  # 经典策略
+            maxiter=200,  # 最大迭代次数
+            popsize=15,  # 种群大小（影响搜索广度）
+            tol=0.01,  # 收敛阈值
+            mutation=(0.5, 1),  # 变异参数
+            recombination=0.7,  # 重组概率
+            polish=False,  # 暂不启用局部细化（后续用局部优化器处理）
         )
 
-        # 第二阶段：Powell优化（利用BFGS结果）
-        result_powell = minimize(
+        # 第二阶段：局部优化细化（使用全局优化结果作为初始点）
+        print("\n===== 正在执行局部优化细化 =====")
+        local_result = minimize(
             fun=error_function,
-            x0=result_bfgs.x,
-            method="Powell",
-            bounds=bounds,
-            options={"disp": False, "maxiter": 3000},
-        )
-
-        # 第三阶段：Nelder-Mead优化（生成初始单纯形）
-        step_size = 100  # 适当减小步长提升精度
-        initial_simplex = [
-            result_powell.x,
-            result_powell.x + [step_size, 0, 0],
-            result_powell.x + [0, step_size, 0],
-            result_powell.x + [0, 0, step_size / 10],
-        ]
-        result_nelder = minimize(
-            fun=error_function,
-            x0=result_powell.x,
-            method="Nelder-Mead",
-            options={"disp": True, "maxiter": 3000, "initial_simplex": initial_simplex},
-            bounds=bounds,
+            x0=global_result.x,
+            method="BFGS",  # 也可替换为L-BFGS-B等梯度优化器
+            options={"disp": True, "maxiter": 3000},
         )
 
         # 更新最优结果
-        if result_nelder.fun < best_error:
-            best_error = result_nelder.fun
-            best_result = result_nelder
+        if local_result.fun < best_error:
+            best_error = local_result.fun
+            best_result = local_result
             print(f"找到更优解！当前最小误差: {best_error:.2f}")
 
     # 最终优化结果
@@ -348,7 +356,7 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
 
 if __name__ == "__main__":
     main(
-        image_path="1900-1910.jpg",
+        image_path="1910.jpg",
         dem_path="dem_dx.tif",
         feature_path="feature_points_with_annotations.csv",
         camera_locations_path="potential_camera_locations.csv",
