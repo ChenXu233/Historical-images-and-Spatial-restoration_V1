@@ -145,53 +145,6 @@ def get_dem_elevation(dem_data: DEMData, coord, coord_type="utm"):
     return dem_elev
 
 
-def read_camera_locations(
-    camera_locations_path: str, dem_data: DEMData
-) -> List[CameraLocation]:
-    updated_rows = []
-    recs = []
-    with open(camera_locations_path, encoding="utf-8") as csv_file:
-        reader = csv.DictReader(csv_file)
-        fieldnames = reader.fieldnames
-        updated_rows.append(fieldnames)  # 保留标题行
-        line_count = 0
-        for row in reader:
-            line_count += 1
-            try:
-                grid_code = int(row["Grid_code"])  # 假设列名为 grid_code
-                longitude = float(row["Longitude"])  # 假设列名为 longitude
-                latitude = float(row["Latitude"])  # 假设列名为 latitude
-                elevation = (
-                    get_dem_elevation(
-                        dem_data, (longitude, latitude), coord_type="wgs84"
-                    )
-                    + 1.5
-                )
-                row["Elevation"] = str(elevation)  # 更新Elevation列
-                updated_rows.append(list(row.values()))  # 保存更新后的行
-
-                logging.debug(
-                    f"Processing row {line_count}: lat={latitude}, lon={longitude}"
-                )
-                easting, northing = geo_transformer.wgs84_to_utm(longitude, latitude)
-                pos3d = np.array([float(easting), float(northing), float(elevation)])
-
-                rec = CameraLocation(grid_code=grid_code, pos3d=pos3d)  # 验证数据格式
-
-                recs.append(rec)
-            except ValueError as e:
-                logging.error(f"Error processing row {line_count}: {e}")
-                continue
-
-    # 将更新后的数据写回文件
-    with open(camera_locations_path, "w", newline="", encoding="utf-8") as csv_file:
-        writer = csv.writer(csv_file, delimiter=",")
-        writer.writerows(updated_rows)
-
-    logging.debug(f"Processed {line_count} lines.")
-    return recs
-
-
 def read_points_data(
     features: List[Feature], scale: float, dem_data: DEMData
 ) -> List[PointData]:

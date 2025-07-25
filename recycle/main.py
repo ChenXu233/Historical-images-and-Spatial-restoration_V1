@@ -109,7 +109,7 @@ def error_function(camera_pos, point_data):
     return err1 * 10000 + err2 * 10000  # 调整权重以平衡err1和err2
 
 
-def main(image_path: str, dem_path: str, feature_path: str, camera_locations_path: str):
+def main(image_path: str, dem_path: str, feature_path: str):
     """
     主函数，处理图像和DEM数据，并生成CSV文件
     """
@@ -273,5 +273,4 @@ if __name__ == "__main__":
         image_path="1910.jpg",
         dem_path="DEM1.tif",
         feature_path="feature_points_with_annotations1.csv",
-        camera_locations_path="potential_camera_locations.csv",
     )
