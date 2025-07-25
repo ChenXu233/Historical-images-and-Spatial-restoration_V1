@@ -18,7 +18,8 @@ from utils import (
     read_camera_locations,
     read_points_data,
     get_dem_elevation,
-    reprojection,
+    reprojection_to_pixel,
+    reprojection_to_lon_lat,
 )
 from schema import CameraLocation, PointData
 from geo_transformer import geo_transformer
@@ -164,6 +165,18 @@ def find_homographies(
     return num_matches, homographies
 
 
+def error_function(camera_pos, point_data):
+    """输入相机3D坐标，输出err2（目标函数）"""
+    # 调用find_homography计算当前位置的误差（需调整参数适配）
+    _, err1, err2, _ = find_homography(
+        pixels=np.array([r.pixel for r in point_data]),
+        pos3ds=np.array([r.pos3d for r in point_data]),
+        camera_location=camera_pos,
+        ransacbound=RANSACBOUND,
+    )
+    return err1 * 10000 + err2 * 10000  # 调整权重以平衡err1和err2
+
+
 def main(image_path: str, dem_path: str, feature_path: str, camera_locations_path: str):
     """
     主函数，处理图像和DEM数据，并生成CSV文件
@@ -188,26 +201,26 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
     # 读取点数据
     point_data = read_points_data(features, scale=1.0, dem_data=dem_data)
 
-    # 读取相机位置数据
-    camera_locations = read_camera_locations(camera_locations_path, dem_data)
+    # # 读取相机位置数据
+    # camera_locations = read_camera_locations(camera_locations_path, dem_data)
 
-    num_matches12, homographies = find_homographies(point_data, camera_locations)
+    # num_matches12, homographies = find_homographies(point_data, camera_locations)
 
-    num_matches2 = num_matches12[:, 1]
-    num_matches2[num_matches2 == 0] = 1000000
-    min_idx = np.argmin(num_matches2)
-    print("Minimum average reprojection error:", np.min(num_matches2))
-    print("err1:", num_matches12[min_idx, 0])
-    print("err2:", num_matches12[min_idx, 1])
-    print(
-        f"推测相机位置: {camera_locations[min_idx].pos3d}, point_id: {min_idx + 1}, grid_code: {camera_locations[min_idx].grid_code}"
-    )
+    # num_matches2 = num_matches12[:, 1]
+    # num_matches2[num_matches2 == 0] = 1000000
+    # min_idx = np.argmin(num_matches2)
+    # print("Minimum average reprojection error:", np.min(num_matches2))
+    # print("err1:", num_matches12[min_idx, 0])
+    # print("err2:", num_matches12[min_idx, 1])
+    # print(
+    #     f"推测相机位置: {camera_locations[min_idx].pos3d}, point_id: {min_idx + 1}, grid_code: {camera_locations[min_idx].grid_code}"
+    # )
 
-    position = geo_transformer.utm_to_wgs84(
-        camera_locations[min_idx].pos3d[0], camera_locations[min_idx].pos3d[1]
-    )
+    # position = geo_transformer.utm_to_wgs84(
+    #     camera_locations[min_idx].pos3d[0], camera_locations[min_idx].pos3d[1]
+    # )
 
-    print(f"推测相机位置: {position}")
+    # print(f"推测相机位置: {position}")
 
     img_height, img_width, _ = im.shape  # 获取图像的宽度和高度
     plt.figure(figsize=(4, 2))
@@ -220,40 +233,30 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
             plt.text(pixel[0] + 7, pixel[1] - 4, symbol, color="red", fontsize=32)
             plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="red")
 
-    for i in features:
-        if i.pixel_x == 0:
-            continue
-        pixel = reprojection(
-            dem_data,
-            i.longitude,
-            i.latitude,
-            camera_locations[min_idx].pos3d,
-            homographies[min_idx][0],
-        )
-        plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="yellow")
+    # for i in features:
+    #     if i.pixel_x == 0:
+    #         continue
+    #     pixel = reprojection(
+    #         dem_data,
+    #         i.longitude,
+    #         i.latitude,
+    #         camera_locations[min_idx].pos3d,
+    #         homographies[min_idx][0],
+    #     )
+    #     plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="yellow")
 
     initial_pos = point_data[2].pos3d + 1
 
     # ---------------- 新增优化逻辑 ----------------
-    def error_function(camera_pos):
-        """输入相机3D坐标，输出err2（目标函数）"""
-        # 调用find_homography计算当前位置的误差（需调整参数适配）
-        _, err1, err2, _ = find_homography(
-            pixels=np.array([r.pixel for r in point_data]),
-            pos3ds=np.array([r.pos3d for r in point_data]),
-            camera_location=camera_pos,
-            ransacbound=RANSACBOUND,
-        )
-        return err1
 
     # ---------------- 优化初始点生成 ----------------
     # 替换原随机采样为拉丁超立方采样
     from scipy.stats import qmc  # 新增导入
 
     # 设置10公里搜索范围（10000米）
-    search_radius = 5000
+    search_radius = 10000
 
-    num_initial_points = 10  # 可根据计算资源调整
+    num_initial_points = 30  # 可根据计算资源调整
 
     # 定义搜索空间边界
     bounds = [
@@ -280,8 +283,18 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
     bounds = [
         (initial_pos[0] - search_radius, initial_pos[0] + search_radius),
         (initial_pos[1] - search_radius, initial_pos[1] + search_radius),
-        (initial_pos[2] - search_radius / 10, initial_pos[2] + search_radius / 10),
+        (
+            (
+                initial_pos[2] - search_radius / 10
+                if initial_pos[2] - search_radius / 10 > 0
+                else 0
+            ),
+            initial_pos[2] + search_radius / 10,
+        ),
     ]
+
+    best_result = None
+    best_error = np.inf
 
     for idx, start_pos in enumerate(initial_points):
         print(f"\n===== 正在优化第 {idx + 1}/{num_initial_points} 个初始点 =====")
@@ -290,20 +303,19 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
         # ---------------- 替换为全局+局部优化组合 ----------------
         from scipy.optimize import differential_evolution  # 新增导入
 
-        best_result = None
-        best_error = np.inf
-
         # 第一阶段：全局优化（差分进化算法）
         print("===== 正在执行全局优化（差分进化） =====")
         global_result = differential_evolution(
             func=error_function,
+            args=(point_data,),
             bounds=bounds,
             strategy="best1bin",  # 经典策略
             maxiter=200,  # 最大迭代次数
-            popsize=15,  # 种群大小（影响搜索广度）
-            tol=0.01,  # 收敛阈值
+            popsize=20,  # 种群大小（影响搜索广度）
+            tol=0.0001,  # 收敛阈值
             mutation=(0.5, 1),  # 变异参数
             recombination=0.7,  # 重组概率
+            workers=-1,  # 使用所有可用CPU核心
             polish=False,  # 暂不启用局部细化（后续用局部优化器处理）
         )
 
@@ -311,6 +323,7 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
         print("\n===== 正在执行局部优化细化 =====")
         local_result = minimize(
             fun=error_function,
+            args=(point_data,),
             x0=global_result.x,
             method="BFGS",  # 也可替换为L-BFGS-B等梯度优化器
             options={"disp": True, "maxiter": 3000},
@@ -320,7 +333,8 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
         if local_result.fun < best_error:
             best_error = local_result.fun
             best_result = local_result
-            print(f"找到更优解！当前最小误差: {best_error:.2f}")
+            print(f"找到更优解！当前最小误差: {best_error}")
+            print(f"当前最优位置: {best_result.x}")
 
     # 最终优化结果
     optimized_pos = best_result.x  # 优化后的相机位置
@@ -336,9 +350,7 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
     print(f"优化后相机位置: {optimized_pos}")
 
     for i in features:
-        if i.pixel_x == 0:
-            continue
-        pixel = reprojection(
+        pixel = reprojection_to_pixel(
             dem_data,
             i.longitude,
             i.latitude,
@@ -357,7 +369,7 @@ def main(image_path: str, dem_path: str, feature_path: str, camera_locations_pat
 if __name__ == "__main__":
     main(
         image_path="1910.jpg",
-        dem_path="dem_dx.tif",
-        feature_path="feature_points_with_annotations.csv",
+        dem_path="DEM1.tif",
+        feature_path="feature_points_with_annotations1.csv",
         camera_locations_path="potential_camera_locations.csv",
     )

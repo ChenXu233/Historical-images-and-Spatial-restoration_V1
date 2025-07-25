@@ -799,7 +799,7 @@ def main():
             "pixel_y": "Pixel_y",
             "output": "zOutput_1898.jpg",
             "scale": 1.0,
-            "dem_file": "dem_dx.tif",
+            "dem_file": "DEM1.tif",
         },
         {
             "image_name": "1900-1910.jpg",

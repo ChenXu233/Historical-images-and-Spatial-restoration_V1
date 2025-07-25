@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.interpolate import RegularGridInterpolator
+from scipy.optimize import minimize
 from osgeo import gdal
 
 from typing import List, Tuple, Dict, Optional
@@ -82,8 +83,8 @@ def load_dem_data(dem_file_path: str) -> DEMData:
             utm_y_list.append(northing)
         except Exception as e:
             logging.error(f"转换 DEM 坐标 {lon},{lat} 到 UTM 时出错: {e}")
-    dem_utm_x_range = (min(utm_x_list), max(utm_x_list)) if utm_x_list else (0.0, 0.0)
-    dem_utm_y_range = (min(utm_y_list), max(utm_y_list)) if utm_y_list else (0.0, 0.0)
+    dem_utm_x_range = (min(utm_x_list), max(utm_x_list)) if utm_x_list else (None, None)
+    dem_utm_y_range = (min(utm_y_list), max(utm_y_list)) if utm_y_list else (None, None)
 
     dem_interpolator = RegularGridInterpolator((dem_y, dem_x), dem_array)
 
@@ -234,7 +235,7 @@ def read_points_data(
     return recs
 
 
-def reprojection(
+def reprojection_to_pixel(
     dem_data: DEMData,
     longitude,
     latitude,
@@ -252,6 +253,71 @@ def reprojection(
     pp2 = np.matmul(np.linalg.inv(M), p)
     pp2 = pp2 / pp2[2]
     return pp2
+
+
+def reprojection_to_lon_lat(
+    dem_data: DEMData,
+    pixel_x,
+    pixel_y,
+    camera_location,
+    M,
+):
+    # 步骤1：将像素点反投影到相机局部坐标系（齐次坐标）
+    pixel_hom = np.array([pixel_x, pixel_y, 1.0])  # 像素齐次坐标
+    local_hom = np.linalg.inv(M) @ pixel_hom  # 反投影到局部齐次坐标
+    local_xy = (
+        local_hom[:2] / local_hom[2]
+    )  # 归一化局部二维坐标（对应find_homography中的pos2）
+
+    # 步骤2：恢复局部三维坐标（根据find_homography的坐标变换逻辑）
+    # find_homography中局部坐标变换为：p = [p[2], p[1], p[0]] / p[2] → 对应 local_xy = [p[2]/p[2], p[1]/p[2]] = [1, p[1]/p[2]]
+    # 因此，局部三维坐标的原始比例为：[p[0], p[1], p[2]] = [t, local_xy[1]*t, t]（t为比例因子）
+    # 射线方向向量为：[t, local_xy[1]*t, t] → 简化为方向向量 [1, local_xy[1], 1]
+    ray_direction = np.array([1, local_xy[1], 1])  # 射线方向（相机局部坐标系）
+
+    # 步骤3：将局部方向向量转换为全局坐标系（相机位置为原点）
+    # 全局射线起点：相机位置（UTM坐标）
+    ray_origin = camera_location
+    # 全局射线方向向量（需与find_homography的坐标变换一致）
+    # find_homography中 pos3d - camera_pos → [x, y, z] → 转换为 [z, y, x]
+    # 因此，局部坐标的x对应全局的z，y对应全局的y，z对应全局的x
+    global_ray_direction = np.array(
+        [
+            ray_direction[2],  # 局部x → 全局z
+            ray_direction[1],  # 局部y → 全局y
+            ray_direction[0],  # 局部z → 全局x
+        ]
+    )
+
+    # 步骤4：构建射线参数方程（全局UTM坐标系）
+    # 射线方程：ray_origin + t * global_ray_direction，t>0为射线方向
+    # 需要找到t使得该点的高程等于DEM高程（Z = dem_elevation）
+    def find_intersection_t(t: float) -> float:
+        # 计算射线上某点的UTM坐标
+        x = ray_origin[0] + t * global_ray_direction[0]
+        y = ray_origin[1] + t * global_ray_direction[1]
+        z = ray_origin[2] + t * global_ray_direction[2]
+        # 获取该点的DEM高程（通过经纬度转换）
+        lon, lat = geo_transformer.utm_to_wgs84(x, y)
+        dem_z = get_dem_elevation(dem_data, (lon, lat), coord_type="wgs84")
+        # 返回当前点高程与DEM高程的差值（用于求解t）
+        return z - dem_z
+
+    # 步骤5：使用牛顿法求解射线与DEM的交点（t值）
+    from scipy.optimize import newton
+
+    try:
+        # 初始猜测t=1（可根据场景调整）
+        t_solution = newton(find_intersection_t, x0=1.0, maxiter=50)
+    except RuntimeError:
+        raise ValueError("射线与DEM无交点或收敛失败")
+
+    # 步骤6：计算交点的UTM坐标并转换为经纬度
+    x_intersect = ray_origin[0] + t_solution * global_ray_direction[0]
+    y_intersect = ray_origin[1] + t_solution * global_ray_direction[1]
+    lon, lat = geo_transformer.utm_to_wgs84(x_intersect, y_intersect)
+
+    return (lon, lat)
 
 
 # def correlate_features(features: List[Feature], depth_val: float) -> List[List]:
