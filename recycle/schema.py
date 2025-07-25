@@ -38,10 +38,10 @@ class DEMData(BaseModel):
     )
     x_range: Tuple[float, float] = Field(..., description="地形数据在X轴上的范围")
     y_range: Tuple[float, float] = Field(..., description="地形数据在Y轴上的范围")
-    utm_x_range: Tuple[float, float] = Field(
+    utm_x_range: Tuple[float | None, float | None] = Field(
         ..., description="地形数据在UTM坐标系中的X轴范围"
     )
-    utm_y_range: Tuple[float, float] = Field(
+    utm_y_range: Tuple[float | None, float | None] = Field(
         ..., description="地形数据在UTM坐标系中的Y轴范围"
     )
     data: np.ndarray = Field(..., description="地形数据数组")

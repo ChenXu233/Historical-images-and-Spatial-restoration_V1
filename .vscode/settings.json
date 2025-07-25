@@ -1,14 +1,22 @@
 {
   "cSpell.words": [
     "argmin",
+    "BFGS",
+    "disp",
+    "figsize",
     "fontext",
     "fontpaths",
+    "fontsize",
     "homographies",
     "Homography",
+    "imshow",
     "levelname",
     "linalg",
+    "markersize",
+    "maxiter",
     "ndarray",
     "osgeo",
+    "popsize",
     "RANSAC",
     "RANSACBOUND",
     "reprojection"
