@@ -154,7 +154,7 @@ def main(image_path: str, dem_path: str, feature_path: str):
     # 设置10公里搜索范围（10000米）
     search_radius = 10000
 
-    num_initial_points = 30  # 可根据计算资源调整
+    num_initial_points = 5  # 可根据计算资源调整
 
     # 定义搜索空间边界
     bounds = [
@@ -208,13 +208,14 @@ def main(image_path: str, dem_path: str, feature_path: str):
             args=(point_data,),
             bounds=bounds,
             strategy="best1bin",  # 经典策略
-            maxiter=200,  # 最大迭代次数
+            maxiter=2000,  # 最大迭代次数
             popsize=20,  # 种群大小（影响搜索广度）
             tol=0.0001,  # 收敛阈值
             mutation=(0.5, 1),  # 变异参数
             recombination=0.7,  # 重组概率
             workers=-1,  # 使用所有可用CPU核心
             polish=False,  # 暂不启用局部细化（后续用局部优化器处理）
+            updating="deferred",  # 延迟更新策略
         )
 
         # 第二阶段：局部优化细化（使用全局优化结果作为初始点）
@@ -270,7 +271,7 @@ def main(image_path: str, dem_path: str, feature_path: str):
 
 if __name__ == "__main__":
     main(
-        image_path="1910.jpg",
+        image_path="1898.jpg",
         dem_path="DEM1.tif",
         feature_path="feature_points_with_annotations1.csv",
     )

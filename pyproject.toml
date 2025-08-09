@@ -16,6 +16,9 @@ dependencies = [
     "trimesh>=4.6.10",
     "tk>=0.1.0",
     "pydantic>=2.11.7",
+    "fastapi>=0.116.1",
+    "uvicorn>=0.35.0",
+    "pydantic-settings>=2.10.1",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
