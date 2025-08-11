@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Labelimg for history photos</title>
+    <link
+      rel="stylesheet"
+      href="{{ request.url_for('static', path='/css/labelimg.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <div class="canvas-container">
+        <canvas id="imageCanvas"></canvas>
+        <div class="coordinates" id="coordinates"></div>
+      </div>
+      <div class="control-panel">
+        <div class="file-upload">
+          <label
+            for="imageLoader"
+            class="input-field"
+            style="cursor: pointer; width: auto"
+            >上传历史照片</label
+          >
+          <input
+            type="file"
+            id="imageLoader"
+            accept="image/*"
+            style="display: none"
+          />
+          <span id="fileStatus" class="file-status">未选择照片</span>
+        </div>
+
+        <div class="file-upload">
+          <label
+            for="csvLoader"
+            class="input-field"
+            style="cursor: pointer; width: auto"
+            >上传已知坐标</label
+          >
+          <input
+            type="file"
+            id="csvLoader"
+            accept=".csv,.xlsx"
+            style="display: none"
+          />
+          <span id="csvStatus" class="file-status">未选择表格</span>
+        </div>
+
+        <div class="zoom-controls">
+          <label>缩放: </label>
+          <input
+            type="range"
+            id="zoom"
+            min="10"
+            max="300"
+            step="1"
+            value="100"
+            style="flex: 1"
+          />
+          <input
+            type="number"
+            id="zoomValue"
+            class="zoom-input input-field"
+            min="10"
+            max="300"
+            value="100"
+          />
+          <span>%</span>
+        </div>
+
+        <div class="input-group">
+          <input
+            type="text"
+            id="pointSymbol"
+            placeholder="特征点符号 (如199)"
+            class="input-field"
+          />
+          <input
+            type="text"
+            id="pointName"
+            placeholder="特征点名称"
+            class="input-field"
+          />
+
+          <input
+            type="text"
+            id="longitude"
+            placeholder="经度"
+            class="input-field"
+          />
+          <input
+            type="text"
+            id="latitude"
+            placeholder="纬度"
+            class="input-field"
+          />
+          <div class="coordinate-hint">
+            单位为度，小数部分为5位，如199.39048
+          </div>
+        </div>
+
+        <button onclick="saveAnnotations()" class="input-field">
+          保存标注
+        </button>
+        <button onclick="exportAnnotatedImage()" class="input-field">
+          导出标注照片
+        </button>
+        <button onclick="exportCSV()" class="input-field">导出CSV</button>
+        <div class="point-list" id="pointList"></div>
+        <div class="image-list" id="imageList"></div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="{{ request.url_for('static', path='/js/labelimg.js') }}"></script>
+  </body>
+</html>
