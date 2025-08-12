@@ -4,8 +4,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 
 
-class Label(Base):
-    __tablename__ = "label"
+class Feature(Base):
+    __tablename__ = "feature"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String, index=True)
@@ -17,8 +17,14 @@ class Label(Base):
         Integer, ForeignKey("building_point.id"), nullable=False
     )
     building_point: Mapped["BuildingPoint"] = relationship(
-        "BuildingPoint", back_populates="labels"
+        "BuildingPoint", back_populates="features"
     )
+
+    image_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("images.id"), nullable=False
+    )
+    image: Mapped["Images"] = relationship("Images", back_populates="features")
 
 
 from model.building_point import BuildingPoint
+from model.images import Images

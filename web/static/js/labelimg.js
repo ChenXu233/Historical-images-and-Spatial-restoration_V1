@@ -273,11 +273,12 @@ function setupEventListeners() {
   document
     .getElementById("imageLoader")
     .addEventListener("change", function (e) {
+      const file = e.target.files[0];
       const reader = new FileReader();
       reader.onload = function (event) {
         image = new Image();
         image.onload = function () {
-          currentImageName = e.target.files[0].name;
+          currentImageName = file.name;
           points = annotations[currentImageName] || [];
           fitImageToCanvas();
           updatePointList();
@@ -286,9 +287,11 @@ function setupEventListeners() {
         };
         image.src = event.target.result;
       };
-      reader.readAsDataURL(e.target.files[0]);
-    });
+      reader.readAsDataURL(file);
 
+      // 上传图片到后端
+      uploadImageToBackend(file);
+    });
   // CSV文件加载
   document.getElementById("csvLoader").addEventListener("change", function (e) {
     const file = e.target.files[0];
@@ -534,6 +537,26 @@ function processXLSXData(sheet) {
     }
   });
   console.log("Feature points:", featurePoints);
+}
+
+function uploadImageToBackend(file) {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  fetch("/api/upload_image", {
+    method: "POST",
+    body: formData,
+  })
+    .then((response) => {
+      if (response.ok) {
+        console.log("图片上传成功");
+      } else {
+        console.error("图片上传失败");
+      }
+    })
+    .catch((error) => {
+      console.error("上传过程中发生错误:", error);
+    });
 }
 
 // 初始化

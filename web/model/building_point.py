@@ -1,8 +1,12 @@
 from database import Base
 
-from sqlalchemy import Integer, String, Float, ForeignKey
+from sqlalchemy import Integer, String, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from model.feature import Feature
 
 class BuildingPoint(Base):
     __tablename__ = "building_point"
@@ -11,9 +15,8 @@ class BuildingPoint(Base):
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
 
-    labels: Mapped[list["Label"]] = relationship(
-        "Label", back_populates="building_point"
+    features: Mapped[list["Feature"]] = relationship(
+        "Feature", back_populates="building_point"
     )
 
 
-from model.label import Label

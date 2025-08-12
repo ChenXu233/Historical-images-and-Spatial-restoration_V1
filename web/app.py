@@ -2,12 +2,16 @@ from fastapi import FastAPI, staticfiles
 from fastapi.requests import Request
 from fastapi.responses import RedirectResponse
 
-from router import init_router
 from pathlib import Path
+
+from router import init_router
+from database import init_db
 
 
 def create_app() -> FastAPI:
     app = FastAPI()
+
+    init_db()
 
     @app.get("/")
     async def read_root(request: Request):

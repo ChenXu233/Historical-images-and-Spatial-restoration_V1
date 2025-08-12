@@ -22,3 +22,5 @@ recycle/historical photos/test_image.jpg
 recycle/DEM2.tif
 recycle/DEM1.tif
 recycle/feature_points_with_annotations1.csv
+test.db
+uploaded_images/*
