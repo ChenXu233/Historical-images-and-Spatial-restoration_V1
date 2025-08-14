@@ -31,6 +31,15 @@
         </div>
 
         <div class="file-upload">
+          <select id="existingImageSelect" class="input-field">
+            <option value="">选择已有历史照片</option>
+          </select>
+          <button onclick="loadExistingImage()" class="input-field">
+            加载选中照片
+          </button>
+        </div>
+
+        <div class="file-upload">
           <label
             for="csvLoader"
             class="input-field"
@@ -69,19 +78,15 @@
         </div>
 
         <div class="input-group">
+          <select id="buildingPointSelect" class="input-field">
+            <option value="">选择现有建筑点或输入新数据</option>
+          </select>
           <input
             type="text"
             id="pointSymbol"
             placeholder="特征点符号 (如199)"
             class="input-field"
           />
-          <input
-            type="text"
-            id="pointName"
-            placeholder="特征点名称"
-            class="input-field"
-          />
-
           <input
             type="text"
             id="longitude"
@@ -94,20 +99,31 @@
             placeholder="纬度"
             class="input-field"
           />
+
+          <input
+            type="text"
+            id="buildName"
+            placeholder="建筑名称"
+            class="input-field"
+          />
           <div class="coordinate-hint">
             单位为度，小数部分为5位，如199.39048
           </div>
+          <button onclick="saveBuildingPointToDB()" class="input-field">
+            保存建筑点到数据库
+          </button>
         </div>
 
         <button onclick="saveAnnotations()" class="input-field">
           保存标注
         </button>
+        <button onclick="deleteAnnotations()" class="input-field">
+          删除标注
+        </button>
         <button onclick="exportAnnotatedImage()" class="input-field">
           导出标注照片
         </button>
-        <button onclick="exportCSV()" class="input-field">导出CSV</button>
         <div class="point-list" id="pointList"></div>
-        <div class="image-list" id="imageList"></div>
       </div>
     </div>
 

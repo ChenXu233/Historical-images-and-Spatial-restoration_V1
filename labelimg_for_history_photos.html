@@ -67,6 +67,32 @@
             border-radius: 4px;
             font-size: 12px; 
         }
+        .point-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .point-item-details {
+            font-size: 11px;
+            color: #666;
+        }
+        .point-item-coordinates {
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .point-item-delete {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .point-item-delete:hover {
+            background: #cc0000;
+        }
         .coordinates {
             position: fixed;
             bottom: 10px;
@@ -445,13 +471,16 @@ function redraw() {
 function updatePointList() {
     const list = document.getElementById('pointList');
     list.innerHTML = points.map((point, index) => `
-        <div class="point-item" style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                ${point.symbol} - ${point.name} (${point.x}, ${point.y})<br>
-                ${point.longitude ? '经度: ' + point.longitude + '° ' : ''}
-                ${point.latitude ? '纬度: ' + point.latitude + '° ' : ''}
+        <div class="point-item">
+            <div class="point-item-header">
+                <div><strong>${point.symbol}</strong> - ${point.name}</div>
+                <button class="point-item-delete" onclick="removePoint(${index})">删除</button>
             </div>
-            <button onclick="removePoint(${index})" style="margin-left: 10px;">删除</button>
+            <div class="point-item-details">
+                <span class="point-item-coordinates">坐标: (${point.x}, ${point.y})</span>
+                ${point.longitude ? '<span>经度: ' + point.longitude + '°</span>' : ''}
+                ${point.latitude ? '<span>纬度: ' + point.latitude + '°</span>' : ''}
+            </div>
         </div>
     `).join('');
 }

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from model.feature import Feature
 
+
 class BuildingPoint(Base):
     __tablename__ = "building_point"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -18,5 +19,3 @@ class BuildingPoint(Base):
     features: Mapped[list["Feature"]] = relationship(
         "Feature", back_populates="building_point"
     )
-
-
