@@ -7,13 +7,13 @@ import uuid
 from pathlib import Path
 
 from schema.building_point import BuildingPoint
-from schema.features import Feature, UploadFeatures
+from schema.features import UploadFeatures
 from model.feature import Feature as FeatureModel
 from model.building_point import BuildingPoint as BuildingPointModels
 from model.images import Images as ImagesModel
 from database import get_db
 from fastapi.responses import JSONResponse
-import shutil
+
 
 api = APIRouter(prefix="/api", tags=["api"])
 
@@ -226,3 +226,40 @@ async def upload_image(
     db.refresh(image_model)
 
     return {"status": "success", "filename": unique_filename, "path": relative_path}
+
+
+@api.post("/calculate_camera_position")
+async def calculate_camera_position_endpoint(
+    image_id: int = Form(...), db: Session = Depends(get_db)
+):
+    """
+    计算相机位置
+    """
+    try:
+        # 获取图片信息
+        image = db.query(ImagesModel).filter(ImagesModel.id == image_id).first()
+        if not image:
+            raise HTTPException(status_code=404, detail="图片未找到")
+
+        # 获取图片特征点
+        features = (
+            db.query(FeatureModel).filter(FeatureModel.image_id == image_id).all()
+        )
+        if not features:
+            raise HTTPException(status_code=400, detail="图片没有特征点")
+
+        # 这里需要调用相机位置计算函数
+        # 由于相机位置计算需要完整的图像路径、DEM文件路径和特征点文件路径
+        # 我们需要构建这些路径或传递必要的数据
+        # 暂时返回一个示例响应
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "相机位置计算功能已集成，但尚未完全实现",
+                "camera_position": None,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"计算相机位置时发生错误: {str(e)}")

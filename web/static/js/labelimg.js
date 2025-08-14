@@ -614,6 +614,40 @@ function handleWheel(e) {
   redraw();
 }
 
+// 计算相机位置
+function calculateCameraPosition() {
+  if (!currentImageId) {
+    alert("请先选择一张图片");
+    return;
+  }
+
+  // 发送请求到后端计算相机位置
+  fetch("/api/calculate_camera_position", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: `image_id=${currentImageId}`,
+  })
+    .then((response) => {
+      if (response.ok) {
+        return response.json();
+      } else {
+        return response.text().then((text) => {
+          throw new Error(text);
+        });
+      }
+    })
+    .then((data) => {
+      console.log("相机位置计算结果:", data);
+      alert(`相机位置计算完成: ${data.message}`);
+    })
+    .catch((error) => {
+      console.error("计算过程中发生错误:", error);
+      alert("计算过程中发生错误: " + error.message);
+    });
+}
+
 // 初始化
 document.addEventListener("DOMContentLoaded", function () {
   console.log("页面加载完成，初始化...");

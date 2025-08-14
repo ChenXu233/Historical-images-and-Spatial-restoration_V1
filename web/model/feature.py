@@ -1,5 +1,13 @@
-from sqlalchemy import Integer, String, Float, ForeignKey
+from sqlalchemy import Integer, String, ForeignKey
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from model.building_point import BuildingPoint
+    from model.images import Images
 
 from database import Base
 
@@ -24,7 +32,3 @@ class Feature(Base):
         Integer, ForeignKey("images.id"), nullable=False
     )
     image: Mapped["Images"] = relationship("Images", back_populates="features")
-
-
-from model.building_point import BuildingPoint
-from model.images import Images

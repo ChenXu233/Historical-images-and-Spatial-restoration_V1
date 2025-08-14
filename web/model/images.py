@@ -1,5 +1,10 @@
-from sqlalchemy import Integer, String, Float, ForeignKey
+from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from model.feature import Feature
 
 from database import Base
 
@@ -12,6 +17,3 @@ class Images(Base):
     path: Mapped[str] = mapped_column(String, index=True)
 
     features: Mapped[list["Feature"]] = relationship("Feature", back_populates="image")
-
-
-from model.feature import Feature

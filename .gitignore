@@ -24,3 +24,4 @@ recycle/DEM1.tif
 recycle/feature_points_with_annotations1.csv
 test.db
 /web/static/uploaded_images/*
+web/service/recycle/DEM2.tif
