@@ -1,27 +1,14 @@
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
-from matplotlib import font_manager
-import os
 
+from typing import List
 from scipy.optimize import minimize
 
 
 ## 本身
-from utils import (
-    load_and_prepare_image,
-    load_dem_data,
-    get_features,
-    read_points_data,
-    reprojection_to_pixel,
-)
-from geo_transformer import geo_transformer
 
-# 设置字体
-plt.rcParams["font.sans-serif"] = ["SimHei"]  # 使用黑体
-plt.rcParams["axes.unicode_minus"] = False  # 解决负号 '-' 显示
-# 验证字体是否存在
-font_path = font_manager.findSystemFonts(fontpaths=None, fontext="ttf")
+from service.recycle.geo_transformer import geo_transformer
+from service.recycle.schema import PointData
 
 
 RANSACBOUND = 50.0
@@ -109,41 +96,9 @@ def error_function(camera_pos, point_data):
     return err1 * 10000 + err2 * 10000  # 调整权重以平衡err1和err2
 
 
-def main(image_path: str, dem_path: str, feature_path: str):
-    """
-    主函数，处理图像和DEM数据，并生成CSV文件
-    """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
-
-    # 检查图像文件是否存在
-    image_path = os.path.join("historical photos", image_path)
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
-
-    # 加载图像
-    img = load_and_prepare_image(image_path)
-
-    # 加载DEM数据
-    dem_data = load_dem_data(dem_path)
-
-    # 获取特征数据
-    features = get_features(feature_path)
-
-    # 读取点数据
-    point_data = read_points_data(features, scale=1.0, dem_data=dem_data)
-
-    img_height, img_width, _ = img.shape  # 获取图像的宽度和高度
-    plt.figure(figsize=(4, 2))
-    plt.imshow(img)
-
-    for rec in point_data:
-        symbol = rec.symbol
-        pixel = rec.pixel
-        if pixel[0] != 0 or pixel[1] != 0:
-            plt.text(pixel[0] + 7, pixel[1] - 4, symbol, color="red", fontsize=32)
-            plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="red")
-
+def calculate(
+    point_data: List[PointData],
+):
     initial_pos = point_data[2].pos3d + 1
 
     # ---------------- 新增优化逻辑 ----------------
@@ -252,26 +207,6 @@ def main(image_path: str, dem_path: str, feature_path: str):
     print("优化后位置误差:", best_error)
     print(f"优化后相机位置: {optimized_pos}")
 
-    for i in features:
-        pixel = reprojection_to_pixel(
-            dem_data,
-            i.longitude,
-            i.latitude,
-            optimized_pos,
-            M,
-        )
-        plt.plot(pixel[0], pixel[1], marker="s", markersize=8, color="blue")
-
     position = geo_transformer.utm_to_wgs84(optimized_pos[0], optimized_pos[1])
 
-    print(f"推测相机位置: {position}")
-
-    plt.show()
-
-
-if __name__ == "__main__":
-    main(
-        image_path="1898.jpg",
-        dem_path="DEM1.tif",
-        feature_path="feature_points_with_annotations1.csv",
-    )
+    return position

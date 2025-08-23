@@ -2,8 +2,6 @@ import numpy as np
 from typing import Tuple
 from pyproj import Transformer
 
-from logger import logging
-
 
 class GeoCoordTransformer:
     def __init__(self):
@@ -19,7 +17,7 @@ class GeoCoordTransformer:
                 raise ValueError("Invalid UTM coordinates")
             return easting, northing
         except Exception as e:
-            logging.exception(f"坐标转换失败: {str(e)}")
+            print(f"坐标转换失败: {str(e)}")
             raise e
 
     def utm_to_wgs84(self, easting: float, northing: float) -> Tuple[float, float]:
@@ -31,7 +29,7 @@ class GeoCoordTransformer:
                 raise ValueError("Invalid WGS84 coordinates")
             return lon, lat
         except Exception as e:
-            logging.exception(f"坐标转换失败: {str(e)}")
+            print(f"坐标转换失败: {str(e)}")
             raise e
 
 

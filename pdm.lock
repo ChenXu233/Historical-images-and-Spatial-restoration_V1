@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:bf8af94093dd753ca26f983eb5b9256373c49df2faa0f1dc08ebfe899b6435d4"
+content_hash = "sha256:0f48c605a9d61656fc78c3e74b0bf4dddb366d10f5eb0343ed38410a027d8de9"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -247,6 +247,14 @@ files = [
     {file = "fonttools-4.58.0-cp313-cp313-win_amd64.whl", hash = "sha256:75e68ee2ec9aaa173cf5e33f243da1d51d653d5e25090f2722bc644a78db0f1a"},
     {file = "fonttools-4.58.0-py3-none-any.whl", hash = "sha256:c96c36880be2268be409df7b08c5b5dacac1827083461a6bc2cb07b8cbcec1d7"},
     {file = "fonttools-4.58.0.tar.gz", hash = "sha256:27423d0606a2c7b336913254bf0b1193ebd471d5f725d665e875c5e88a011a43"},
+]
+
+[[package]]
+name = "gdal"
+version = "3.11.3"
+summary = ""
+files = [
+    {file = "gdal-3.11.3.tar.gz", hash = "sha256:4c3ad0fae393b5ddb093a7e4b890077839b2a6acdbd19202657fe4e881886efa"},
 ]
 
 [[package]]

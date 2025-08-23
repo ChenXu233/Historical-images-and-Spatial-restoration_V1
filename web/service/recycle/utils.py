@@ -1,17 +1,18 @@
 import math
-import cv2
-import csv
 import numpy as np
 
 from scipy.interpolate import RegularGridInterpolator
 from osgeo import gdal
 
+from sqlalchemy.orm import Session
+
 from typing import List
 
 ##
-from logger import logging
-from geo_transformer import geo_transformer
-from schema import Feature, DEMData, CameraLocation, PointData
+from service.recycle.geo_transformer import geo_transformer
+from service.recycle.schema import Feature, DEMData, PointData
+
+from model.feature import Feature as ORMFeature
 
 
 def calc_bearing(x1: float, y1: float, x2: float, y2: float) -> float:
@@ -37,18 +38,6 @@ def calc_bearing(x1: float, y1: float, x2: float, y2: float) -> float:
             degrees_final = 360 + 180 - degrees_final
 
     return degrees_final
-
-
-def load_and_prepare_image(image_path):
-    """
-    加载并准备图像,将 OpenCV 加载的 BGR 格式图像转换为 Matplotlib 所需的 RGB 格式。
-    """
-    im = cv2.imread(image_path)
-    im2 = np.copy(im)
-    im[:, :, 0] = im2[:, :, 2]
-    im[:, :, 1] = im2[:, :, 1]
-    im[:, :, 2] = im2[:, :, 0]
-    return im
 
 
 # 加载DEM数据
@@ -80,7 +69,8 @@ def load_dem_data(dem_file_path: str) -> DEMData:
             utm_x_list.append(easting)
             utm_y_list.append(northing)
         except Exception as e:
-            logging.error(f"转换 DEM 坐标 {lon},{lat} 到 UTM 时出错: {e}")
+            print(f"转换 DEM 坐标 {lon},{lat} 到 UTM 时出错: {e}")
+
     dem_utm_x_range = (min(utm_x_list), max(utm_x_list)) if utm_x_list else (None, None)
     dem_utm_y_range = (min(utm_y_list), max(utm_y_list)) if utm_y_list else (None, None)
 
@@ -94,35 +84,66 @@ def load_dem_data(dem_file_path: str) -> DEMData:
         utm_y_range=dem_utm_y_range,
         data=dem_array,
     )  # 验证数据格式
-    logging.debug(f"DEM 范围: 经度 {dem_data.x_range}, 纬度 {dem_data.y_range}")
-    logging.debug(
-        f"DEM UTM 范围: 东距 {dem_data.utm_x_range}, 北距 {dem_data.utm_y_range}"
-    )
+    print(f"DEM 范围: 经度 {dem_data.x_range}, 纬度 {dem_data.y_range}")
+    print(f"DEM UTM 范围: 东距 {dem_data.utm_x_range}, 北距 {dem_data.utm_y_range}")
     return dem_data
 
 
-def get_features(feature_path: str) -> List[Feature]:
+def load_features_from_orm(img_id: int, db: Session) -> List[Feature]:
     """
-    从 CSV 文件加载特征数据，并返回一个包含特征信息的列表。
+    从 ORM 中加载特征数据，并返回一个包含特征信息的列表。
     """
-    features = []
-    with open(feature_path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            feature = {
-                "object_id": int(row["Objectid"]),
-                "pixel_x": float(row["Pixel_x"]),
-                "pixel_y": float(row["Pixel_y"]),
-                "symbol": row["Symbol"],
-                "name": row["Name"],
-                "height": float(row["Height"]),
-                "longitude": float(row["Longitude"]),
-                "latitude": float(row["Latitude"]),
-                "elevation": float(row["Elevation"]),
-            }
-            feature = Feature(**feature)  # 验证数据格式
-            features.append(feature)
-    return features
+
+    features = db.query(ORMFeature).filter(ORMFeature.image_id == img_id).all()
+
+    if not features:
+        raise ValueError(f"没有找到与图片 ID {img_id} 相关的特征点。")
+
+    r_feature = []
+    for feature in features:
+        r_feature.append(
+            Feature(
+                object_id=feature.object_id,
+                pixel_x=feature.pixel_x,
+                pixel_y=feature.pixel_y,
+                symbol=feature.name,
+                name=feature.building_point.name,
+                height=4,
+                longitude=feature.building_point.longitude,
+                latitude=feature.building_point.latitude,
+                elevation=None,
+            )
+        )
+
+    return r_feature
+
+
+def load_points_data_from_orm(
+    features: List[Feature], dem_data: DEMData
+) -> List[PointData]:
+    """
+    从 ORM 中加载点数据，并返回一个包含点信息的列表。
+    """
+    recs = []
+    for feature in features:
+        pixel = np.array([int(feature.pixel_x), int(feature.pixel_y)])
+        longitude = float(feature.longitude)
+        latitude = float(feature.latitude)
+        elevation = get_dem_elevation(
+            dem_data, (longitude, latitude), coord_type="wgs84"
+        )
+        # 跳过当前处理照片中像素坐标为0,0的点
+        if int(feature.pixel_x) == 0 and int(feature.pixel_y) == 0:
+            continue
+
+        easting, northing = geo_transformer.wgs84_to_utm(longitude, latitude)
+        pos3d = np.array([easting, northing, elevation])
+        rec = PointData(
+            pixel=pixel, symbol=feature.symbol, name=feature.name, pos3d=pos3d
+        )  # 验证数据格式
+        recs.append(rec)
+
+    return recs
 
 
 def get_dem_elevation(dem_data: DEMData, coord, coord_type="utm"):
@@ -143,47 +164,6 @@ def get_dem_elevation(dem_data: DEMData, coord, coord_type="utm"):
     # 插值器构造时使用的坐标顺序为 (lat, lon)
     dem_elev = dem_data.interpolator((lat, lon))
     return dem_elev
-
-
-def read_points_data(
-    features: List[Feature], scale: float, dem_data: DEMData
-) -> List[PointData]:
-    recs = []
-    line_count = 0
-    for feature in features:
-        pixel = np.array([int(feature.pixel_x), int(feature.pixel_y)]) / scale
-        longitude = float(feature.longitude)
-        latitude = float(feature.latitude)
-        elevation = get_dem_elevation(
-            dem_data, (longitude, latitude), coord_type="wgs84"
-        )
-        # 跳过当前处理照片中像素坐标为0,0的点
-        if int(feature.pixel_x) == 0 and int(feature.pixel_y) == 0:
-            continue
-
-        # 添加坐标转换
-        try:
-            logging.debug(
-                f"Processing row {line_count}: lat={latitude}, lon={longitude}"
-            )
-            easting, northing = geo_transformer.wgs84_to_utm(
-                longitude, latitude
-            )  # 注意顺序
-            pos3d = np.array([easting, northing, elevation])
-            print(
-                f"Processed Point - Symbol: {feature.symbol}, Name: {feature.name}, Pixel: {pixel}, Lon: {longitude}, Lat: {latitude}, Easting: {easting}, Northing: {northing}, Elevation: {elevation}"
-            )
-        except ValueError as e:
-            logging.error(f"Error processing row {line_count}: {e}")
-            continue
-
-        rec = PointData(
-            pixel=pixel, symbol=feature.symbol, name=feature.name, pos3d=pos3d
-        )  # 验证数据格式
-        recs.append(rec)
-
-    logging.debug(f"Processed {line_count} lines.")
-    return recs
 
 
 def reprojection_to_pixel(

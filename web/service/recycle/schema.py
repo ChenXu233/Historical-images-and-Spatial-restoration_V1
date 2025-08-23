@@ -49,15 +49,6 @@ class DEMData(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)  # 添加配置项
 
 
-class CameraLocation(BaseModel):
-    grid_code: int = Field(..., description="相机位置的网格代码，用于唯一标识相机位置")
-    pos3d: np.ndarray = Field(
-        ..., description="相机位置的三维坐标，包括X、Y、Z轴的坐标值"
-    )
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)  # 添加配置项
-
-
 class PointData(BaseModel):
     pixel: np.ndarray = Field(
         ..., description="特征在图像中的像素坐标，通常为二维数组 [x, y]"
