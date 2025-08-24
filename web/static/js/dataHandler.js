@@ -241,7 +241,16 @@ function calculateCameraPosition() {
     })
     .then((data) => {
       console.log("相机位置计算结果:", data);
-      showToast(`相机位置计算完成: ${data.message}`, "success");
+      // 显示确认弹窗
+      const cameraPosition = `X: ${data.camera_position[0]}, Y: ${data.camera_position[1]}`;
+
+      if (confirm(`相机位置计算成功:\n${cameraPosition}\n?`)) {
+        console.log("用户确认了相机位置");
+        // 用户点击确定后的操作可以在这里添加
+      } else {
+        console.log("用户取消了相机位置");
+        // 用户点击取消后的操作可以在这里添加
+      }
     })
     .catch((error) => {
       console.error("计算过程中发生错误:", error);
