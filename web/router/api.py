@@ -13,6 +13,15 @@ from model.building_point import BuildingPoint as BuildingPointModels
 from model.images import Images as ImagesModel
 from database import get_db
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import List
+
+from service.recycle.main import calculate
+from service.recycle.utils import (
+    load_dem_data,
+    load_points_data_from_orm,
+    load_features_from_orm,
+)
 
 
 api = APIRouter(prefix="/api", tags=["api"])
@@ -20,6 +29,17 @@ api = APIRouter(prefix="/api", tags=["api"])
 # 创建上传目录
 UPLOAD_DIR = Path(__file__).parent.parent / "static" / "uploaded_images"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+
+# 定义建筑点数据模型
+class BuildingPointData(BaseModel):
+    name: str
+    longitude: float
+    latitude: float
+
+
+class BuildingPointsUpload(BaseModel):
+    points: List[BuildingPointData]
 
 
 @api.get("/building_points")
@@ -44,6 +64,22 @@ async def get_building_points(db: Session = Depends(get_db)):
 async def upload_building_point(
     request: Request, building_point: BuildingPoint, db: Session = Depends(get_db)
 ):
+    # 检查是否已存在具有相同名称、经纬度的建筑点
+    existing_building_point = (
+        db.query(BuildingPointModels)
+        .filter(
+            and_(
+                BuildingPointModels.name == building_point.name,
+                BuildingPointModels.longitude == building_point.longitude,
+                BuildingPointModels.latitude == building_point.latitude,
+            )
+        )
+        .first()
+    )
+
+    if existing_building_point:
+        return {"status": "success", "message": "建筑点已存在"}
+
     building_point_models = BuildingPointModels(
         name=building_point.name,
         latitude=building_point.latitude,
@@ -52,7 +88,7 @@ async def upload_building_point(
     building_point_models.features = []
     db.add(building_point_models)
     db.commit()
-    return {"status": "success"}
+    return {"status": "success", "message": "建筑点创建成功"}
 
 
 @api.post("/upload_features")
@@ -115,6 +151,52 @@ async def upload_features(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"上传特征点时发生错误: {str(e)}")
+
+
+@api.post("/upload_building_points")
+async def upload_building_points(
+    request: Request, data: BuildingPointsUpload, db: Session = Depends(get_db)
+):
+    try:
+        created_count = 0
+        existing_count = 0
+
+        for point_data in data.points:
+            # 检查是否已存在具有相同名称、经纬度的建筑点
+            existing_building_point = (
+                db.query(BuildingPointModels)
+                .filter(
+                    and_(
+                        BuildingPointModels.name == point_data.name,
+                        BuildingPointModels.longitude == point_data.longitude,
+                        BuildingPointModels.latitude == point_data.latitude,
+                    )
+                )
+                .first()
+            )
+
+            if existing_building_point:
+                existing_count += 1
+            else:
+                # 创建新的建筑点
+                new_building_point = BuildingPointModels(
+                    name=point_data.name,
+                    longitude=point_data.longitude,
+                    latitude=point_data.latitude,
+                )
+                db.add(new_building_point)
+                created_count += 1
+
+        db.commit()
+
+        return JSONResponse(
+            content={
+                "message": f"成功上传 {created_count} 个新建筑点，{existing_count} 个建筑点已存在"
+            }
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"上传建筑点时发生错误: {str(e)}")
 
 
 @api.delete("/images/{image_id}/features")
@@ -242,21 +324,21 @@ async def calculate_camera_position_endpoint(
             raise HTTPException(status_code=404, detail="图片未找到")
 
         # 获取图片特征点
-        features = (
-            db.query(FeatureModel).filter(FeatureModel.image_id == image_id).all()
-        )
+        features = load_features_from_orm(image_id, db)
         if not features:
             raise HTTPException(status_code=400, detail="图片没有特征点")
 
-        # 这里需要调用相机位置计算函数
-        # 由于相机位置计算需要完整的图像路径、DEM文件路径和特征点文件路径
-        # 我们需要构建这些路径或传递必要的数据
-        # 暂时返回一个示例响应
+        # 获取DEM文件路径和特征点文件路径
+        dem = load_dem_data(dem_file_path="./service/recycle/DEM1.tif")
+
+        points = load_points_data_from_orm(features, dem)
+
+        camera_position = calculate(points)
+
         return JSONResponse(
             content={
                 "status": "success",
-                "message": "相机位置计算功能已集成，但尚未完全实现",
-                "camera_position": None,
+                "camera_position": camera_position,
             }
         )
     except HTTPException:

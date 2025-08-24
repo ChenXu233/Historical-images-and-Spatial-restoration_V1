@@ -95,7 +95,7 @@ function handleMouseDown(e) {
       updatePointList();
       redraw();
     } else {
-      alert("请先选择或输入特征点信息");
+      showToast("请先选择或输入特征点信息", "warning");
     }
   } else if (e.button === 2) {
     // 右键

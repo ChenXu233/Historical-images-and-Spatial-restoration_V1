@@ -85,14 +85,14 @@ function saveAnnotations() {
     // 上传标注信息到后端
     uploadAnnotations();
 
-    alert("标注信息已保存");
+    showToast("标注信息已保存", "success");
   }
 }
 
 // 删除标注信息
 function deleteAnnotations() {
   if (!currentImageId) {
-    alert("请先选择一张图片");
+    showToast("请先选择一张图片", "warning");
     return;
   }
 
@@ -108,14 +108,14 @@ function deleteAnnotations() {
           annotations[currentImageName] = [];
           updatePointList();
           redraw();
-          alert("标注信息已删除");
+          showToast("标注信息已删除", "success");
         } else {
-          alert("删除标注信息失败");
+          showToast("删除标注信息失败", "error");
         }
       })
       .catch((error) => {
         console.error("删除过程中发生错误:", error);
-        alert("删除过程中发生错误");
+        showToast("删除过程中发生错误", "error");
       });
   }
 }

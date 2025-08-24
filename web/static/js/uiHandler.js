@@ -99,25 +99,48 @@ function handleCSVUpload(e) {
       skipEmptyLines: true,
       complete: function (results) {
         featurePoints = {};
+        const features = [];
         results.data.forEach((row) => {
-          const key = `${row.Symbol}-${row.Name}`;
+          const key = `${row.Name}`;
           featurePoints[key] = {
-            Objectid: row.Objectid,
-            symbol: row.Symbol,
             name: row.Name,
             height: row.Height,
             longitude: row.Longitude,
             latitude: row.Latitude,
-            elevation: row.Elevation,
           };
+          // 准备上传到后端的数据
+          features.push({
+            name: row.Name,
+            longitude: parseFloat(row.Longitude),
+            latitude: parseFloat(row.Latitude),
+          });
         });
-        document.getElementById(
-          "csvStatus"
-        ).textContent = `已加载 ${results.data.length} 行数据`;
+
+        // 上传数据到后端
+        fetch("/api/upload_building_points", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ points: features }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("上传成功:", data);
+            document.getElementById(
+              "csvStatus"
+            ).textContent = `已加载 ${results.data.length} 行数据，已上传到后端`;
+          })
+          .catch((error) => {
+            console.error("上传失败:", error);
+            document.getElementById(
+              "csvStatus"
+            ).textContent = `已加载 ${results.data.length} 行数据，上传到后端失败`;
+          });
       },
       error: function (error) {
         console.error("CSV解析错误:", error);
-        alert("CSV文件解析失败");
+        showToast("CSV文件解析失败", "error");
       },
     });
   };

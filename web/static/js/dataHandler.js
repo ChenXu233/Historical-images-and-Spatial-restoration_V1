@@ -59,11 +59,11 @@ function uploadAnnotations() {
     })
     .then((data) => {
       console.log("上传响应:", data);
-      alert("标注信息上传成功");
+      showToast("标注信息上传成功", "success");
     })
     .catch((error) => {
       console.error("上传过程中发生错误:", error);
-      alert("上传过程中发生错误: " + error.message);
+      showToast("上传过程中发生错误: " + error.message, "error");
     });
 }
 
@@ -83,7 +83,7 @@ function loadExistingImages() {
     })
     .catch((error) => {
       console.error("获取图片列表失败:", error);
-      alert("获取图片列表失败");
+      showToast("获取图片列表失败", "error");
     });
 }
 
@@ -93,7 +93,7 @@ function loadExistingImage() {
   const imageId = select.value;
 
   if (!imageId) {
-    alert("请先选择一张图片");
+    showToast("请先选择一张图片", "warning");
     return;
   }
 
@@ -115,7 +115,7 @@ function loadExistingImage() {
     })
     .catch((error) => {
       console.error("加载图片失败:", error);
-      alert("加载图片失败");
+      showToast("加载图片失败", "error");
     });
 }
 
@@ -142,7 +142,7 @@ function loadAnnotationsForImage(imageId) {
     })
     .catch((error) => {
       console.error("加载标注信息失败:", error);
-      alert("加载标注信息失败");
+      showToast("加载标注信息失败", "error");
     });
 }
 
@@ -162,7 +162,7 @@ function loadBuildingPointData() {
     })
     .catch((error) => {
       console.error("获取建筑点数据失败:", error);
-      alert("获取建筑点数据失败");
+      showToast("获取建筑点数据失败", "error");
     });
 }
 
@@ -173,13 +173,13 @@ function saveBuildingPointToDB() {
   const latitude = document.getElementById("latitude").value;
 
   if (!name || !longitude || !latitude) {
-    alert("请填写完整的建筑点信息");
+    showToast("请填写完整的建筑点信息", "warning");
     return;
   }
 
   // 验证坐标格式
   if (!validateCoordinate(longitude) || !validateCoordinate(latitude)) {
-    alert("坐标格式不正确，请输入有效的数字");
+    showToast("坐标格式不正确，请输入有效的数字", "warning");
     return;
   }
 
@@ -198,7 +198,7 @@ function saveBuildingPointToDB() {
   })
     .then((response) => {
       if (response.ok) {
-        alert("建筑点保存成功");
+        showToast("建筑点保存成功", "success");
         // 重新加载建筑点数据
         loadBuildingPointData();
         // 清空输入框
@@ -206,19 +206,19 @@ function saveBuildingPointToDB() {
         document.getElementById("longitude").value = "";
         document.getElementById("latitude").value = "";
       } else {
-        alert("建筑点保存失败");
+        showToast("建筑点保存失败", "error");
       }
     })
     .catch((error) => {
       console.error("保存过程中发生错误:", error);
-      alert("保存过程中发生错误");
+      showToast("保存过程中发生错误", "error");
     });
 }
 
 // 计算相机位置
 function calculateCameraPosition() {
   if (!currentImageId) {
-    alert("请先选择一张图片");
+    showToast("请先选择一张图片", "warning");
     return;
   }
 
@@ -241,11 +241,11 @@ function calculateCameraPosition() {
     })
     .then((data) => {
       console.log("相机位置计算结果:", data);
-      alert(`相机位置计算完成: ${data.message}`);
+      showToast(`相机位置计算完成: ${data.message}`, "success");
     })
     .catch((error) => {
       console.error("计算过程中发生错误:", error);
-      alert("计算过程中发生错误: " + error.message);
+      showToast("计算过程中发生错误: " + error.message, "error");
     });
 }
 
