@@ -55,14 +55,18 @@ function redraw() {
     // 绘制标记点
     points.forEach((point, index) => {
       console.log("绘制点:", { x: point.x, y: point.y, symbol: point.symbol });
+      // 转换点坐标以适应当前画布变换
+      const displayX = point.x * scale + offsetX;
+      const displayY = point.y * scale + offsetY;
+
       ctx.beginPath();
-      ctx.arc(point.x, point.y, 3 / scale, 0, 2 * Math.PI);
+      ctx.arc(displayX, displayY, 3, 0, 2 * Math.PI);
       ctx.fillStyle = "red";
       ctx.fill();
 
-      ctx.font = `${12 / scale}px Arial`;
+      ctx.font = "12px Arial";
       ctx.fillStyle = "yellow";
-      ctx.fillText(point.symbol, point.x + 5 / scale, point.y + 5 / scale);
+      ctx.fillText(point.symbol, displayX + 5, displayY + 5);
     });
 
     ctx.restore();
@@ -72,6 +76,7 @@ function redraw() {
 // 鼠标事件处理函数
 function handleMouseDown(e) {
   const rect = canvas.getBoundingClientRect();
+  // 调整坐标计算方式，考虑画布的缩放和偏移
   const x = (e.clientX - rect.left - offsetX) / scale;
   const y = (e.clientY - rect.top - offsetY) / scale;
 
@@ -119,6 +124,7 @@ function handleMouseMove(e) {
 
   // 显示坐标
   const rect = canvas.getBoundingClientRect();
+  // 调整坐标显示方式，使其与点标注位置一致
   const x = (e.clientX - rect.left - offsetX) / scale;
   const y = (e.clientY - rect.top - offsetY) / scale;
   coordsDisplay.textContent = `坐标: (${x.toFixed(2)}, ${y.toFixed(2)})`;
@@ -136,19 +142,27 @@ function handleWheel(e) {
   e.preventDefault();
   const zoomIntensity = 0.1;
   const rect = canvas.getBoundingClientRect();
+  // 修正鼠标位置计算，相对于画布
   const mouseX = e.clientX - rect.left;
   const mouseY = e.clientY - rect.top;
 
   const wheel = e.deltaY < 0 ? 1 : -1;
   const zoom = Math.exp(wheel * zoomIntensity);
 
-  // 更新缩放中心点
-  offsetX = mouseX - zoom * (mouseX - offsetX);
-  offsetY = mouseY - zoom * (mouseY - offsetY);
+  // 修正缩放中心点计算
+  const newScale = scale * zoom;
+  // 限制缩放范围
+  const clampedScale = Math.max(0.1, Math.min(newScale, 3));
+
+  // 计算缩放比例变化
+  const scaleRatio = clampedScale / scale;
+
+  // 更新偏移量以保持缩放中心点不变
+  offsetX = mouseX - scaleRatio * (mouseX - offsetX);
+  offsetY = mouseY - scaleRatio * (mouseY - offsetY);
 
   // 更新缩放比例
-  scale *= zoom;
-  scale = Math.max(0.1, Math.min(scale, 3)); // 限制缩放范围
+  scale = clampedScale;
 
   // 更新UI
   const zoomPercent = Math.round(scale * 100);
