@@ -28,7 +28,6 @@ function updatePointList() {
     "X坐标",
     "Y坐标",
     "建筑名称",
-    "符号",
     "经度",
     "纬度",
     "操作",
@@ -47,7 +46,6 @@ function updatePointList() {
       point.x,
       point.y,
       point.name || "",
-      point.symbol || "",
       point.longitude || "",
       point.latitude || "",
     ];
@@ -62,19 +60,12 @@ function updatePointList() {
     const actionCell = row.insertCell();
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "删除";
-    deleteButton.onclick = () => removePoint(index);
+    deleteButton.onclick = () => deleteAnnotation(point.id);
     actionCell.appendChild(deleteButton);
     actionCell.className = "point-table-cell";
   });
 
   pointListDiv.appendChild(table);
-}
-
-// 删除点
-function removePoint(index) {
-  points.splice(index, 1);
-  updatePointList();
-  redraw();
 }
 
 // 保存标注信息
@@ -120,6 +111,35 @@ function deleteAnnotations() {
   }
 }
 
+function deleteAnnotation(featureId) {
+  if (!currentImageId) {
+    showToast("请先选择一张图片", "warning");
+    return;
+  }
+
+  if (confirm("确定要删除这个标注点吗？")) {
+    // 发送请求到后端删除标注点
+    fetch(`/api/images/${currentImageId}/features/${featureId}`, {
+      method: "DELETE",
+    })
+      .then((response) => {
+        if (response.ok) {
+          // 从前端数据中删除该标注点
+          points = points.filter((point) => point.id !== featureId);
+          updatePointList();
+          redraw();
+          showToast("标注点已删除", "success");
+        } else {
+          showToast("删除标注点失败", "error");
+        }
+      })
+      .catch((error) => {
+        console.error("删除过程中发生错误:", error);
+        showToast("删除过程中发生错误", "error");
+      });
+  }
+}
+
 // 导出函数和变量供其他模块使用
 window.points = points;
 window.annotations = annotations;
@@ -130,3 +150,4 @@ window.updatePointList = updatePointList;
 window.removePoint = removePoint;
 window.saveAnnotations = saveAnnotations;
 window.deleteAnnotations = deleteAnnotations;
+window.deleteAnnotation = deleteAnnotation;

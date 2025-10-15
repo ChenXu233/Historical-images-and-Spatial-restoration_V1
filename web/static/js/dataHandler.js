@@ -126,12 +126,11 @@ function loadAnnotationsForImage(imageId) {
     .then((data) => {
       console.log("从后端获取的标注数据:", data);
       points = data.map((feature) => ({
+        id: feature.id,
         x: feature.pixel_x,
         y: feature.pixel_y,
         image_id: currentImageId,
-        // 为保持前端显示功能正常，添加默认值
         name: feature.name || "未命名点",
-        symbol: feature.label || "199",
         longitude: feature.longitude || "",
         latitude: feature.latitude || "",
       }));

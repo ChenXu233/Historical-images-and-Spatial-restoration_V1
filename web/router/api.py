@@ -218,6 +218,33 @@ async def delete_features_for_image(image_id: int, db: Session = Depends(get_db)
         raise HTTPException(status_code=500, detail=f"删除特征点时发生错误: {str(e)}")
 
 
+@api.delete("/images/{image_id}/features/{feature_id}")
+async def delete_feature(image_id: int, feature_id: int, db: Session = Depends(get_db)):
+    try:
+        # 检查图片是否存在
+        image = db.query(ImagesModel).filter(ImagesModel.id == image_id).first()
+        if not image:
+            raise HTTPException(status_code=404, detail="图片不存在")
+
+        # 删除该图片的指定特征点
+        feature = (
+            db.query(FeatureModel)
+            .filter(FeatureModel.id == feature_id, FeatureModel.image_id == image_id)
+            .first()
+        )
+        if not feature:
+            raise HTTPException(status_code=404, detail="特征点不存在")
+
+        # 删除特征点
+        db.delete(feature)
+        db.commit()
+
+        return JSONResponse(content={"message": "特征点删除成功"})
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"删除特征点时发生错误: {str(e)}")
+
+
 @api.get("/images")
 async def get_images(db: Session = Depends(get_db)):
     """获取所有图片列表"""
@@ -268,11 +295,11 @@ async def get_image_features(image_id: int, db: Session = Depends(get_db)):
         return [
             {
                 "id": f.id,
-                "name": f.name,
+                "name": f.building_point.name,
                 "pixel_x": f.pixel_x,
                 "pixel_y": f.pixel_y,
-                "longitude": f.building_point.longitude if f.building_point else None,
-                "latitude": f.building_point.latitude if f.building_point else None,
+                "longitude": f.building_point.longitude,
+                "latitude": f.building_point.latitude,
             }
             for f in features
         ]

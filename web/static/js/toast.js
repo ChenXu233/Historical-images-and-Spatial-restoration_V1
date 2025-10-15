@@ -49,14 +49,14 @@ function showToast(message, type = "info") {
     toast.style.opacity = "1";
   }, 100);
 
-  // 3秒后自动隐藏
+  // 30秒后自动隐藏
   setTimeout(() => {
     toast.style.opacity = "0";
     setTimeout(() => {
       if (toast.parentNode) {
         toast.parentNode.removeChild(toast);
       }
-    }, 300);
+    }, 3000);
   }, 3000);
 }
 

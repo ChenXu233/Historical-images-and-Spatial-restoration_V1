@@ -8,15 +8,13 @@
       href="{{ request.url_for('static', path='/css/labelimg.css') }}"
     />
   </head>
-  <body class="bg-gray-100 min-h-screen p-4">
-    <div
-      class="container mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col md:flex-row"
-    >
+  <body class="bg-gray-100">
+    <div class="flex md:flex-row">
       <div class="canvas-container">
         <canvas id="imageCanvas" class=""></canvas>
         <div class="coordinates" id="coordinates"></div>
       </div>
-      <div class="control-panel w-full md:w-1/3 p-6 space-y-6 bg-gray-50">
+      <div class="md:w-1/3 p-6 space-y-6 bg-gray-50">
         <div class="file-upload bg-white p-4 rounded-lg shadow-sm">
           <label
             for="imageLoader"
@@ -141,17 +139,17 @@
         >
           计算相机位置
         </button>
-        <div
-          class="point-list p-4 bg-white rounded-lg shadow-sm max-h-120 overflow-y-auto"
-          id="pointList"
-        ></div>
       </div>
     </div>
+    <div
+      class="point-list p-4 bg-white rounded-lg shadow-sm max-h-120 overflow-y-auto"
+      id="pointList"
+    ></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-    <script src="{{ request.url_for('static', path='/js/imageProcessor.js') }}"></script>
     <script src="{{ request.url_for('static', path='/js/pointManager.js') }}"></script>
+    <script src="{{ request.url_for('static', path='/js/imageProcessor.js') }}"></script>
     <script src="{{ request.url_for('static', path='/js/dataHandler.js') }}"></script>
     <script src="{{ request.url_for('static', path='/js/uiHandler.js') }}"></script>
     <script src="{{ request.url_for('static', path='/js/toast.js') }}"></script>
