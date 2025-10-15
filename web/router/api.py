@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Form
 from fastapi.requests import Request
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_
+from sqlalchemy import and_
 import os
 import uuid
 from pathlib import Path
@@ -334,6 +334,11 @@ async def calculate_camera_position_endpoint(
         points = load_points_data_from_orm(features, dem)
 
         camera_position = calculate(points)
+
+        db.query(ImagesModel).filter(ImagesModel.id == image_id).update(
+            {"calculated_camera_locations": str(camera_position)}
+        )
+        db.commit()
 
         return JSONResponse(
             content={
