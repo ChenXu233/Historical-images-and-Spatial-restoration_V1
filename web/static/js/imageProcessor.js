@@ -54,17 +54,14 @@ function redraw() {
 
     // 绘制标记点
     points.forEach((point, index) => {
-      console.log("绘制点:", { x: point.x, y: point.y, symbol: point.symbol });
-
-      // 注意：由于已经应用了translate和scale变换，这里直接使用原始坐标即可
       ctx.beginPath();
-      ctx.arc(point.x, point.y, 3, 0, 2 * Math.PI);
+      ctx.arc(point.x, point.y, 3 / scale, 0, 2 * Math.PI);
       ctx.fillStyle = "red";
       ctx.fill();
 
-      ctx.font = "12px Arial";
+      ctx.font = `${20 / scale}px Arial`;
       ctx.fillStyle = "yellow";
-      ctx.fillText(point.name, point.x + 5, point.y + 5);
+      ctx.fillText(point.name, point.x + 5 / scale, point.y + 5 / scale);
     });
 
     ctx.restore();

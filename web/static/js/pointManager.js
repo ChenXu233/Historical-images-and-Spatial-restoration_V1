@@ -147,7 +147,6 @@ window.currentImageName = currentImageName;
 window.currentImageId = currentImageId;
 window.featurePoints = featurePoints;
 window.updatePointList = updatePointList;
-window.removePoint = removePoint;
 window.saveAnnotations = saveAnnotations;
 window.deleteAnnotations = deleteAnnotations;
 window.deleteAnnotation = deleteAnnotation;
