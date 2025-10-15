@@ -686,72 +686,6 @@ def main():
             "scale": 1.0,
             "dem_file": "dem_dx.tif",
         },
-        # {
-        #     "image_name": "1900-1910.jpg",
-        #     "json_file": "1900-1910.json",
-        #     "features": "feature_points_with_annotations.csv",
-        #     "camera_locations": "potential_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_1900-1910.jpg",
-        #     "pixel_y": "Pixel_y_1900-1910.jpg",
-        #     "output": "zOutput_1900-1910.jpg",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_dx.tif"
-        # },
-        # {
-        #     "image_name": "1910.jpg",
-        #     "json_file": "1910.json",
-        #     "features": "feature_points_with_annotations.csv",
-        #     "camera_locations": "potential_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_1910.jpg",
-        #     "pixel_y": "Pixel_y_1910.jpg",
-        #     "output": "zOutput_1910.jpg",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_dx.tif"
-        # },
-        # {
-        #     "image_name": "1920-1930.jpg",
-        #     "json_file": "1920-1930.json",
-        #     "features": "feature_points_with_annotations.csv",
-        #     "camera_locations": "potential_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_1920-1930.jpg",
-        #     "pixel_y": "Pixel_y_1920-1930.jpg",
-        #     "output": "zOutput_1920-1930.jpg",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_dx.tif"
-        # },
-        # {
-        #     "image_name": "1925-1930.jpg",
-        #     "json_file": "1925-1930.json",
-        #     "features": "feature_points_with_annotations.csv",
-        #     "camera_locations": "potential_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_1925-1930.jpg",
-        #     "pixel_y": "Pixel_y_1925-1930.jpg",
-        #     "output": "zOutput_1925-1930.jpg",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_dx.tif"
-        # },
-        # {
-        #     "image_name": "Kuliang.jpg",
-        #     "json_file": "Kuliang.json",
-        #     "features": "feature_points_with_annotations.csv",
-        #     "camera_locations": "potential_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_Kuliang.jpg",
-        #     "pixel_y": "Pixel_y_Kuliang.jpg",
-        #     "output": "zOutput_Kuliang.jpg",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_dx.tif"
-        # },
-        # {
-        #     "image_name": "Siems Siemssen.jpg",
-        #     "json_file": "Siems Siemssen.json",
-        #     "features": "feature_points_with_annotations.csv",
-        #     "camera_locations": "potential_camera_locations.csv",
-        #     "pixel_x": "Pixel_x_Siems Siemssen.jpg",
-        #     "pixel_y": "Pixel_y_Siems Siemssen.jpg",
-        #     "output": "zOutput_Siems Siemssen.jpg",
-        #     "scale": 1.0,
-        #     "dem_file": "dem_dx.tif"
-        # }
     ]
 
     # 指定要处理的图像信息
@@ -774,17 +708,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-print("**********************")
-# print ('ret: ')
-# print (ret)
-# print ('mtx: ')
-# print (mtx)
-# print ('dist: ')
-# print (dist)
-# print('rvecs: ')
-# print(rvecs)
-# print ('tvecs: ')
-# print(tvecs)
-
-print("Done!")

@@ -83,16 +83,14 @@ function handleMouseDown(e) {
   if (e.button === 0) {
     // 左键
     // 添加点
-    const symbol = document.getElementById("pointSymbol").value;
     const name = document.getElementById("buildName").value;
     const longitude = document.getElementById("longitude").value;
     const latitude = document.getElementById("latitude").value;
 
-    if (symbol && name) {
+    if (name) {
       points.push({
         x: x,
         y: y,
-        symbol: symbol,
         name: name,
         longitude: longitude,
         latitude: latitude,

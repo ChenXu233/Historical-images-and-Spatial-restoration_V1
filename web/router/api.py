@@ -138,7 +138,6 @@ async def upload_features(
                     building_point_id = new_building_point.id
 
             feature = FeatureModel(
-                name=i.name,
                 pixel_x=i.x,
                 pixel_y=i.y,
                 image_id=i.image_id,
