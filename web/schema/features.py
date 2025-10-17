@@ -35,7 +35,6 @@ class UploadFeature(BaseModel):
     x: float
     y: float
     image_id: int
-    building_point_id: int | None = None
     name: str | None = None
     longitude: float | None = None
     latitude: float | None = None

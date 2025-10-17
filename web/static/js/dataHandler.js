@@ -12,23 +12,11 @@ function uploadAnnotations() {
     const feature = {
       x: point.x,
       y: point.y,
-      image_id: parseInt(currentImageId),
-      name: point.name || "未命名点",
-      symbol: point.symbol || "",
+      image_id: currentImageId,
+      name: point.name,
+      longitude: point.longitude,
+      latitude: point.latitude,
     };
-
-    // 如果有建筑点ID，则添加该字段
-    if (point.building_point_id) {
-      feature.building_point_id = parseInt(point.building_point_id);
-    } else {
-      // 如果没有建筑点ID，则从输入框获取建筑点信息
-      feature.longitude =
-        parseFloat(document.getElementById("longitude").value) || null;
-      feature.latitude =
-        parseFloat(document.getElementById("latitude").value) || null;
-      feature.name = document.getElementById("buildName").value || feature.name;
-    }
-
     return feature;
   });
 

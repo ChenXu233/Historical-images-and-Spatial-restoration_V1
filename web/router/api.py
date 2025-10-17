@@ -98,19 +98,31 @@ async def upload_features(
     db: Session = Depends(get_db),
 ):
     try:
-        for i in features.features:
-            image = db.query(ImagesModel).filter(ImagesModel.id == i.image_id).first()
-            if not image:
-                raise HTTPException(status_code=404, detail="图片不存在")
+        image = (
+            db.query(ImagesModel)
+            .filter(ImagesModel.id == features.features[0].image_id)
+            .first()
+        )
+        if not image:
+            raise HTTPException(status_code=404, detail="图片不存在")
 
-            # 如果没有提供 building_point_id，则自动创建建筑点
-            building_point_id = i.building_point_id
-            if (
-                not building_point_id
-                and i.name
-                and i.longitude is not None
-                and i.latitude is not None
-            ):
+        for i in features.features:
+            # 检查是否已存在具有相同像素坐标和图片ID的特征点
+            existing_feature = (
+                db.query(FeatureModel)
+                .filter(
+                    and_(
+                        FeatureModel.pixel_x == i.x,
+                        FeatureModel.pixel_y == i.y,
+                        FeatureModel.image_id == i.image_id,
+                    )
+                )
+                .first()
+            )
+            if existing_feature:
+                continue
+
+            if i.name and i.longitude and i.latitude:
                 # 检查是否已存在具有相同名称、经纬度的建筑点
                 existing_building_point = (
                     db.query(BuildingPointModels)
@@ -137,13 +149,13 @@ async def upload_features(
                     db.flush()  # 获取新建筑点的 ID
                     building_point_id = new_building_point.id
 
-            feature = FeatureModel(
-                pixel_x=i.x,
-                pixel_y=i.y,
-                image_id=i.image_id,
-                building_point_id=building_point_id,
-            )
-            db.add(feature)
+                feature = FeatureModel(
+                    pixel_x=i.x,
+                    pixel_y=i.y,
+                    image_id=i.image_id,
+                    building_point_id=building_point_id,
+                )
+                db.add(feature)
         db.commit()
 
         return JSONResponse(content={"message": "特征点上传成功"})
