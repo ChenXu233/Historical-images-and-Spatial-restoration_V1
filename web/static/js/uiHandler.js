@@ -80,6 +80,25 @@ function handleImageUpload(e) {
       fitImageToCanvas();
       updatePointList();
       document.getElementById("fileStatus").textContent = currentImageName;
+
+      // 将图片上传到后端
+      const formData = new FormData();
+      formData.append("image", file);
+
+      fetch("/api/upload_image", {
+        method: "POST",
+        body: formData,
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          console.log("图片上传成功:", data);
+          // 可以在这里添加成功提示或其他操作
+        })
+        .catch((error) => {
+          console.error("图片上传失败:", error);
+          // 可以在这里添加失败提示
+        });
+      loadExistingImages();
     };
     image.src = event.target.result;
   };

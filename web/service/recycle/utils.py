@@ -103,10 +103,10 @@ def load_features_from_orm(img_id: int, db: Session) -> List[Feature]:
     for feature in features:
         r_feature.append(
             Feature(
-                object_id=feature.object_id,
+                object_id=feature.id,
                 pixel_x=feature.pixel_x,
                 pixel_y=feature.pixel_y,
-                symbol=feature.name,
+                symbol=feature.building_point.name,
                 name=feature.building_point.name,
                 height=4,
                 longitude=feature.building_point.longitude,

@@ -7,7 +7,7 @@ class AppConfig(BaseSettings):
     DEBUG: bool = False
     PORT: int = 8081
     LOG_PATH: Path = Path("./logs")
-    APP_NAME: str = "宝石检测"
+    APP_NAME: str = "相机位置计算"
     DATABASE_URI: str = "sqlite:///./test.db"  # 示例数据库URI
 
     class Config:

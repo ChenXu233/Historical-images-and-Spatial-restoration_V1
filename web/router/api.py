@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List
 
-from service.recycle.main import calculate
+from service.recycle.main import EPNP_calculate
 from service.recycle.utils import (
     load_dem_data,
     load_points_data_from_orm,
@@ -359,7 +359,9 @@ async def calculate_camera_position_endpoint(
 
         points = load_points_data_from_orm(features, dem)
 
-        camera_position = calculate(points)
+        camera_position, focal_length, sensor_size, reprojection_error = EPNP_calculate(
+            points
+        )
 
         db.query(ImagesModel).filter(ImagesModel.id == image_id).update(
             {"calculated_camera_locations": str(camera_position)}
@@ -370,6 +372,13 @@ async def calculate_camera_position_endpoint(
             content={
                 "status": "success",
                 "camera_position": camera_position,
+                "message": f"""
+                最优解：
+                焦距：{focal_length} mm，
+                传感器尺寸：{sensor_size[0]} x {sensor_size[1]} mm，
+                重投影误差：{reprojection_error} px
+                相机原点：{camera_position}
+                """,
             }
         )
     except HTTPException:

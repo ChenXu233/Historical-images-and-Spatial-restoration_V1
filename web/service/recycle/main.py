@@ -107,7 +107,9 @@ def error_function(camera_pos, point_data):
 # EPNP算法计算相机位置 - 多次计算并选择重投影误差最小的解
 def EPNP_calculate(
     point_data: List[PointData],
-) -> Tuple[float, float, float]:
+) -> Tuple[
+    Tuple[float, float, float], int, Tuple[int, int], float
+]:  # 相机位置（经度，纬度，高程），焦距，传感器尺寸，重投影误差
     # 从point_data中提取3D点和2D像素点
     pos3d = np.array([rec.pos3d for rec in point_data], dtype=np.float64).reshape(-1, 3)
     pixels = np.array([rec.pixel for rec in point_data], dtype=np.float64).reshape(
@@ -264,7 +266,15 @@ def EPNP_calculate(
     print(f"重投影误差: {best_result['mean_error']:.2f} pixels")
     print(f"相机原点（WGS84）: ({lon}, {lat}, {height})")
 
-    return (lon, lat, height)
+    return (
+        (lon, lat, float(height)),
+        best_result["focal_length"],
+        (
+            best_result["sensor_width"],
+            best_result["sensor_height"],
+        ),
+        best_result["mean_error"],
+    )
 
 
 def calculate(
@@ -339,7 +349,7 @@ def calculate(
             tol=0.0001,  # 收敛阈值
             mutation=(0.5, 1),  # 变异参数
             recombination=0.7,  # 重组概率
-            workers=-1,  # 使用所有可用CPU核心
+            workers=1,  # 使用所有可用CPU核心
             polish=False,  # 暂不启用局部细化（后续用局部优化器处理）
             updating="deferred",  # 延迟更新策略
         )
