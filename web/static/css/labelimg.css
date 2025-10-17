@@ -1,7 +1,6 @@
 body {
   margin: 0;
   padding: 20px;
-  overflow: hidden;
 }
 
 .container {
@@ -15,7 +14,6 @@ body {
   position: relative;
   border: 1px solid #ccc;
   flex: 1;
-  overflow: hidden;
   min-width: 0; /* 防止canvas溢出 */
 }
 

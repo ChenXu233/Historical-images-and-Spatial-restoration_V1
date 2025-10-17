@@ -184,3 +184,166 @@ def reprojection_to_pixel(
     pp2 = np.matmul(np.linalg.inv(M), p)
     pp2 = pp2 / pp2[2]
     return pp2
+
+
+def pixel_to_ray(pixel_x, pixel_y, K, R, ray_origin):
+    """
+    将像素坐标 (pixel_x, pixel_y) 转换为射线方向.
+
+    参数:
+      pixel_x, pixel_y -- 像素坐标
+      K -- 根据物理参数换算到像素单位的内参矩阵
+      R -- 旋转矩阵，要求转换后可将相机坐标转换至UTM坐标系
+      ray_origin -- 相机在UTM坐标系下的位置
+
+    返回:
+      (ray_origin, ray_direction) 其中 ray_direction 为UTM坐标系下的单位向量
+    """
+    # 构建齐次像素向量
+    pixel_homogeneous = np.array([pixel_x, pixel_y, 1.0], dtype=np.float64)
+    print("【DEBUG】像素齐次向量:", pixel_homogeneous)
+
+    # 计算相机坐标下的射线方向（未归一化）
+    camera_ray = np.linalg.inv(K) @ pixel_homogeneous
+    camera_ray /= np.linalg.norm(camera_ray)
+    print("【DEBUG】相机坐标下的射线方向:", camera_ray)
+
+    # 将相机坐标下的射线方向转换到UTM坐标系
+    # 如果你的流程中 R 已为从物体到相机坐标的转换，应使用 R.T 进行转换
+    utm_ray = R.T @ camera_ray
+    utm_ray /= np.linalg.norm(utm_ray)
+
+    return ray_origin, utm_ray
+
+
+def compute_optimization_factors(control_points, K, R, ray_origin):
+    optimization_factors = []
+    for cp in control_points:
+        true_geo = np.array(cp.pos3d, dtype=np.float64)
+        ideal_direction = true_geo - ray_origin
+        print(f"【DEBUG】归一化前的理想UTM射线方向: {ideal_direction}")
+        norm_ideal = np.linalg.norm(ideal_direction)
+        if norm_ideal == 0:
+            continue
+        ideal_direction /= norm_ideal
+        _, computed_ray = pixel_to_ray(cp.pixel[0], cp.pixel[1], K, R, ray_origin)
+        computed_ray /= np.linalg.norm(computed_ray)
+        optimization_factor_x = ideal_direction[0] / computed_ray[0]
+        optimization_factor_y = ideal_direction[1] / computed_ray[1]
+        optimization_factor_z = ideal_direction[2] / computed_ray[2]
+
+        optimization_factors.append(
+            (optimization_factor_x, optimization_factor_y, optimization_factor_z)
+        )
+        print(f"【DEBUG】控制点 {cp['symbol']} 的理想UTM射线方向: {ideal_direction}")
+        print(f"【DEBUG】像素射线方向: {computed_ray}")
+        print(
+            f"【DEBUG】控制点 {cp['symbol']} 的优化因子: ({optimization_factor_x}, {optimization_factor_y}, {optimization_factor_z})"
+        )
+    return optimization_factors
+
+
+def calculate_weights(input_pixel, control_points, max_weight=1, knn_weight=30):
+    weights = []
+    input_pixel = np.array(
+        input_pixel, dtype=np.float64
+    )  # 确保 input_pixel 是浮点数类型
+    distances = []
+    for cp in control_points:
+        pixel = np.array(cp["pixel"], dtype=np.float64)  # 确保 pixel 是浮点数类型
+        distance = np.linalg.norm(input_pixel - pixel)
+        distances.append(distance)
+        weight = min(
+            1.0 / distance if distance != 0 else 1.0, max_weight
+        )  # 限制权重最大值
+        weights.append(weight)
+
+    # 找到距离最近的控制点并提升其权重
+    min_distance_index = np.argmin(distances)
+    weights[min_distance_index] *= knn_weight
+
+    # 输出每个控制点的距离和权重信息
+    for i, cp in enumerate(control_points):
+        print(
+            f"【DEBUG】控制点 {cp['symbol']} 的距离: {distances[i]}, 权重: {weights[i]}"
+        )
+
+    return np.array(weights)
+
+
+def weighted_average_optimization_factors(factors, weights):
+    # 将权重归一化
+    normalized_weights = weights / np.sum(weights)
+    print(f"【DEBUG】归一化权重: {normalized_weights}")
+    weighted_factors = np.average(factors, axis=0, weights=normalized_weights)
+    return weighted_factors
+
+
+def ray_intersect_dem(
+    ray_origin, ray_direction, dem_data, max_search_dist=5000, step=1
+):
+    current_pos = np.array(ray_origin, dtype=np.float64)
+    step_count = 0  # 初始化步进计数器
+    for _ in range(int(max_search_dist / step)):
+        print(f"【DEBUG】当前UTM坐标: {current_pos}, 当前射线方向: {ray_direction}")
+        current_easting = current_pos[0]
+        current_northing = current_pos[1]
+        lon, lat = geo_transformer.utm_to_wgs84(current_easting, current_northing)
+        try:
+            dem_elev = dem_data["interpolator"]((lat, lon))
+        except Exception as e:
+            print(f"【错误】插值时出错: {e}")
+            return None, step_count
+        print(f"【DEBUG】DEM海拔: {dem_elev}, 当前高度: {current_pos[2]}")
+
+        if step_count >= 50 and current_pos[2] <= dem_elev + 0.5:
+            return np.array(
+                [current_easting, current_northing, current_pos[2]]
+            ), step_count
+
+        current_pos[0] += step * ray_direction[0]
+        current_pos[1] += step * ray_direction[1]
+        current_pos[2] += step * ray_direction[2]
+        step_count += 1  # 增加步进计数器
+
+    return None, step_count
+
+
+def pixel_to_geo(pixel_coord, K, R, ray_origin, dem_data, control_points):
+    optimization_factors = compute_optimization_factors(
+        control_points, K, R, ray_origin
+    )
+    # 计算权重
+    weights = calculate_weights(pixel_coord, control_points)
+    # 计算加权优化因子
+    weighted_optimization_factors = weighted_average_optimization_factors(
+        optimization_factors, weights
+    )
+    print(f"【DEBUG】加权优化因子: {weighted_optimization_factors}")
+    # 计算射线方向
+    ray_origin, ray_direction = pixel_to_ray(
+        pixel_coord[0], pixel_coord[1], K, R, ray_origin
+    )
+    print(f"【DEBUG】初始射线方向: {ray_direction}")
+    # 应用优化因子校正射线方向的Z分量
+    optimized_ray_direction = np.array(
+        [
+            ray_direction[0] * weighted_optimization_factors[0],
+            ray_direction[1] * weighted_optimization_factors[1],
+            ray_direction[2] * weighted_optimization_factors[2],
+        ]
+    )
+    print(f"【DEBUG】优化射线方向: {optimized_ray_direction}")
+    # 归一化校正后的射线方向
+    final_ray_direction = optimized_ray_direction / np.linalg.norm(
+        optimized_ray_direction
+    )
+    print(f"【DEBUG】最终射线方向: {final_ray_direction}")
+    # 计算射线与DEM的交点
+    geo_coord, total_steps = ray_intersect_dem(
+        ray_origin, final_ray_direction, dem_data
+    )
+    print(f"【DEBUG】地理坐标: {geo_coord}")
+    print(f"【DEBUG】射线步进总步数: {total_steps}")
+
+    return geo_coord, total_steps

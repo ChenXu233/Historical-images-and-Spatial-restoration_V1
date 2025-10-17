@@ -123,25 +123,6 @@ def estimate_camera_pose(pos3d, pixels, K):
 
     print("Camera matrix K:\n", K)
 
-    # 可视化3D点
-    fig = plt.figure()
-    ax = fig.add_subplot(121, projection="3d")
-    ax.scatter(pos3d[:, 0], pos3d[:, 1], pos3d[:, 2], c="r", marker="o")
-    ax.set_title("3D Points")
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-
-    # 可视化2D点
-    ax2 = fig.add_subplot(122)
-    ax2.scatter(pixels[:, 0], pixels[:, 1], c="b", marker="x")
-    ax2.set_title("2D Points")
-    ax2.set_xlabel("Pixel X")
-    ax2.set_ylabel("Pixel Y")
-    ax2.invert_yaxis()  # 图像坐标系的Y轴是向下的
-
-    plt.show()
-
     # 使用PnP算法估计旋转向量和平移向量，并返回内点
     success, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(
         pos3d,
@@ -533,9 +514,6 @@ def do_it(
     im[:, :, 0] = im2[:, :, 2]
     im[:, :, 1] = im2[:, :, 1]
     im[:, :, 2] = im2[:, :, 0]
-
-    plt.figure(figsize=(11.69, 8.27))
-    plt.imshow(im)
 
     # 加载DEM数据（DEM范围为UTM）
     dem_data = load_dem_data(dem_file)
