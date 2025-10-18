@@ -298,6 +298,7 @@ async function loadImageAndFeatures(imageItem: Image) {
 
       // 将后端返回的特征点转换为前端的Point格式
       const points: Point[] = features.map((feature: any) => ({
+        id: feature.id,
         pixel_x: feature.pixel_x,
         pixel_y: feature.pixel_y,
         name: feature.name,

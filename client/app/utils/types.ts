@@ -1,5 +1,6 @@
 // 声明类型
 interface Point {
+  id: number;
   pixel_x: number;
   pixel_y: number;
   name: string;

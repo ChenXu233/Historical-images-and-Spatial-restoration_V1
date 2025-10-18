@@ -160,6 +160,7 @@ async function saveAnnotations() {
     // 转换标注点格式为后端需要的格式
     const featuresData = {
       features: points.value.map((point) => ({
+        id: point.id,
         x: point.pixel_x,
         y: point.pixel_y,
         image_id: currentImageName.value,

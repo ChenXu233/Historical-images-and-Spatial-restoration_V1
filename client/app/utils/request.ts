@@ -120,6 +120,12 @@ export const get = <T>(url: string, params?: object) =>
 export const post = <T>(url: string, data?: object) =>
   request<T>({ method: "post", url, data });
 
+export const put = <T>(url: string, data?: object) =>
+  request<T>({ method: "put", url, data });
+
+export const del = <T>(url: string) => request<T>({ method: "delete", url });
+
+
 export const createApiRequest =
   (errorHandler?: ErrorHandler) =>
   async <T>(config: AxiosRequestConfig) => {
