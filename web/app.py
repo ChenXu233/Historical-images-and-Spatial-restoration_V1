@@ -15,7 +15,7 @@ def create_app() -> FastAPI:
     # 添加CORS中间件以允许跨域请求
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # 允许的前端地址
+        allow_origins=["*"],  # 允许所有来源
         allow_credentials=True,
         allow_methods=["*"],  # 允许所有HTTP方法
         allow_headers=["*"],  # 允许所有HTTP头
