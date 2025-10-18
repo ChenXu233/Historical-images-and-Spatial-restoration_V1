@@ -1,6 +1,7 @@
 from fastapi import FastAPI, staticfiles
 from fastapi.requests import Request
 from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from pathlib import Path
 
@@ -10,6 +11,15 @@ from database import init_db
 
 def create_app() -> FastAPI:
     app = FastAPI()
+
+    # 添加CORS中间件以允许跨域请求
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # 允许的前端地址
+        allow_credentials=True,
+        allow_methods=["*"],  # 允许所有HTTP方法
+        allow_headers=["*"],  # 允许所有HTTP头
+    )
 
     init_db()
 

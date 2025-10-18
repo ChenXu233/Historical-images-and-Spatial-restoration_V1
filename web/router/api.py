@@ -348,8 +348,8 @@ async def upload_image(
     return {"status": "success", "filename": unique_filename, "path": relative_path}
 
 
-@api.post("/calculate_camera_position")
-async def calculate_camera_position_endpoint(
+@api.post("/calculate_camera_position/{image_id}")
+async def calculate_camera_position(
     image_id: int = Form(...), db: Session = Depends(get_db)
 ):
     """

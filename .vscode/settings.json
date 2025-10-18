@@ -17,6 +17,7 @@
     "maxiter",
     "ndarray",
     "osgeo",
+    "papaparse",
     "popsize",
     "RANSAC",
     "RANSACBOUND",
