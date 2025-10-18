@@ -1,7 +1,7 @@
 // 声明类型
 interface Point {
-  x: number;
-  y: number;
+  pixel_x: number;
+  pixel_y: number;
   name: string;
   longitude?: string;
   latitude?: string;

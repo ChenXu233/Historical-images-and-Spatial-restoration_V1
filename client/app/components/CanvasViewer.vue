@@ -35,6 +35,7 @@ import { get } from "../utils/request";
 // Props
 const props = defineProps<{
   image: Image | null;
+  points: Point[];
   showCoordinates?: boolean;
 }>();
 
@@ -123,7 +124,13 @@ function drawCanvas(imageElement: HTMLImageElement, points: Point[]) {
       if (!ctx.value) return;
 
       ctx.value.beginPath();
-      ctx.value.arc(point.x, point.y, 3 / scale.value, 0, 2 * Math.PI);
+      ctx.value.arc(
+        point.pixel_x,
+        point.pixel_y,
+        3 / scale.value,
+        0,
+        2 * Math.PI
+      );
       ctx.value.fillStyle = "red";
       ctx.value.fill();
 
@@ -131,8 +138,8 @@ function drawCanvas(imageElement: HTMLImageElement, points: Point[]) {
       ctx.value.fillStyle = "yellow";
       ctx.value.fillText(
         point.name,
-        point.x + 5 / scale.value,
-        point.y + 5 / scale.value
+        point.pixel_x + 5 / scale.value,
+        point.pixel_y + 5 / scale.value
       );
     });
   } catch (error) {
@@ -291,8 +298,8 @@ async function loadImageAndFeatures(imageItem: Image) {
 
       // 将后端返回的特征点转换为前端的Point格式
       const points: Point[] = features.map((feature: any) => ({
-        x: feature.x,
-        y: feature.y,
+        pixel_x: feature.pixel_x,
+        pixel_y: feature.pixel_y,
         name: feature.name,
         longitude: feature.longitude?.toString() || "",
         latitude: feature.latitude?.toString() || "",
@@ -300,15 +307,10 @@ async function loadImageAndFeatures(imageItem: Image) {
 
       // 触发特征点加载完成事件
       emit("pointsLoaded", points);
-
-      // 绘制画布
-      drawCanvas(loadedImage.value, points);
     } catch (error) {
       console.log("获取特征点失败，使用空列表", error);
       // 触发空特征点加载完成事件
       emit("pointsLoaded", []);
-      // 绘制画布（无特征点）
-      drawCanvas(loadedImage.value, []);
     }
   } catch (error) {
     const errorMessage =
@@ -343,8 +345,8 @@ function calculateImageCoordinates(event: MouseEvent): {
 function handleMouseDown(event: MouseEvent) {
   if (!canvas.value || !loadedImage.value || !isCanvasInitialized.value) return;
 
-  if (event.button === 2) {
-    // 右键按下
+  if (event.button === 2 || event.button === 1) {
+    // 右键按下或中键按下
     isRightMouseDown.value = true;
     lastX.value = event.clientX;
     lastY.value = event.clientY;
@@ -358,8 +360,8 @@ function handleMouseDown(event: MouseEvent) {
 
     // 创建新点并触发事件
     const newPoint: Point = {
-      x,
-      y,
+      pixel_x: x,
+      pixel_y: y,
       name: `Point`,
       longitude: "",
       latitude: "",
@@ -381,8 +383,10 @@ function handleMouseMove(event: MouseEvent) {
     lastX.value = event.clientX;
     lastY.value = event.clientY;
 
-    // 请求父组件重新绘制
-    emit("pointsLoaded", []);
+    // 直接重绘画布
+    if (loadedImage.value) {
+      drawCanvas(loadedImage.value, props.points);
+    }
   }
 }
 
@@ -433,8 +437,10 @@ function handleWheel(event: WheelEvent) {
   offsetX.value = mousePos.x - prevMousePos.x * scale.value;
   offsetY.value = mousePos.y - prevMousePos.y * scale.value;
 
-  // 请求父组件重新绘制
-  emit("pointsLoaded", []);
+  // 直接重绘画布
+  if (loadedImage.value) {
+    drawCanvas(loadedImage.value, props.points);
+  }
 }
 
 // 窗口大小改变处理
@@ -442,8 +448,8 @@ function handleResize() {
   // 如果有图片，调整图片以适应画布
   if (loadedImage.value && isCanvasInitialized.value && canvas.value) {
     adjustImageToCanvas(loadedImage.value);
-    // 请求父组件重新绘制
-    emit("pointsLoaded", []);
+    // 直接重绘画布
+    drawCanvas(loadedImage.value, props.points);
   } else if (isCanvasInitialized.value && canvas.value) {
     // 如果没有图片，仅设置画布大小
     setCanvasSize();
@@ -456,6 +462,16 @@ watch(
   (newImage) => {
     if (newImage && isCanvasInitialized.value) {
       loadImageAndFeatures(newImage);
+    }
+  }
+);
+
+// 监听特征点变化，自动重绘
+watch(
+  () => props.points,
+  () => {
+    if (loadedImage.value && isCanvasInitialized.value) {
+      drawCanvas(loadedImage.value, props.points);
     }
   }
 );

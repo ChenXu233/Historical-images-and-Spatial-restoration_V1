@@ -4,6 +4,7 @@
       <CanvasViewer
         :image="currentImage"
         :show-coordinates="true"
+        :points="points"
         @pointAdded="handlePointAdded"
         @pointsLoaded="handlePointsLoaded"
       />
@@ -159,8 +160,8 @@ async function saveAnnotations() {
     // 转换标注点格式为后端需要的格式
     const featuresData = {
       features: points.value.map((point) => ({
-        x: point.x,
-        y: point.y,
+        x: point.pixel_x,
+        y: point.pixel_y,
         image_id: currentImageName.value,
         name: point.name,
         longitude: point.longitude ? parseFloat(point.longitude) : undefined,
