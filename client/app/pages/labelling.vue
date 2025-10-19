@@ -12,14 +12,15 @@
     <div class="control-panel">
       <div class="image-selector-container">
         <label class="input-label">选择历史照片</label>
-        <el-autocomplete
-          v-model="currentImageName"
-          :fetch-suggestions="queryImages"
-          placeholder="请输入关键词搜索照片"
-          :trigger-on-focus="false"
-          @select="handleImageSelectByAutocomplete"
+        <el-select
+          v-model="currentImage"
+          placeholder="请选择历史照片"
           class="w-full"
-          name-property="name"
+          :loading="isLoadingImages"
+          filterable
+          clearable
+          value-key="id"
+          @change="handleImageSelect"
         >
           <template #suffix>
             <el-button
@@ -30,7 +31,15 @@
               刷新
             </el-button>
           </template>
-        </el-autocomplete>
+          <el-option
+            v-for="image in allImages"
+            :key="image.id"
+            :label="image.name"
+            :value="image"
+          >
+            {{ image.name }}
+          </el-option>
+        </el-select>
         <div class="status-text">{{ imageStatusText }}</div>
       </div>
 
@@ -44,6 +53,7 @@
           :loading="isLoadingBuildingPoints"
           filterable
           clearable
+          value-key="id"
         >
           <el-option
             v-for="buildingPoint in buildingPoints"
@@ -63,9 +73,9 @@
         </div>
       </div>
 
-      <button class="input-field" @click="async () => await saveAnnotations()">
+      <el-button @click="async () => await saveAnnotations()">
         保存标注
-      </button>
+      </el-button>
       <PointList :points="points" @removePoint="removePoint" />
     </div>
   </div>
@@ -98,6 +108,7 @@ const canvasContainerWrapper = ref<HTMLDivElement | null>(null);
 
 // 建筑点相关状态
 const buildingPoints = ref<BuildingPoint[]>([]);
+// 修复selectedBuildingPoint的类型定义，确保正确显示选中项
 const selectedBuildingPoint = ref<BuildingPoint | null>(null);
 const isLoadingBuildingPoints = ref(false);
 // 获取建筑点列表
@@ -138,44 +149,8 @@ async function refreshImages() {
   }
 }
 
-// 搜索图片
-function queryImages(query: string, callback: (data: any[]) => void) {
-  if (!query) {
-    // 如果没有搜索词，不显示任何结果
-    callback([]);
-    return;
-  }
-
-  const results = allImages.value
-    .filter((image) => image.name.toLowerCase().includes(query.toLowerCase()))
-    .map((image) => ({
-      value: image.name,
-      ...image,
-    }));
-
-  callback(results);
-}
-
-// 通过Autocomplete选择图片处理
-async function handleImageSelectByAutocomplete(item: Record<string, any>) {
-  // Element Plus may pass a plain object or the suggestion value (or even a string),
-  // so be flexible: try to resolve to an Image either by direct cast or by looking up by name.
-  let selected: Image | null = null;
-
-  if (typeof item === "string") {
-    // If a plain string was passed, try to find the image by name
-    selected = allImages.value.find((img) => img.name === item) ?? null;
-  } else if (item && typeof item === "object") {
-    // If the suggestion object includes a name or value, prefer that to lookup in allImages
-    const name = item.name ?? item.value ?? null;
-    if (name) {
-      selected =
-        allImages.value.find((img) => img.name === name) ?? (item as Image);
-    } else {
-      selected = item as Image;
-    }
-  }
-
+// 通过Select选择图片处理
+function handleImageSelect(selected: Image | null) {
   if (!selected) {
     imageStatusText.value = "未选择照片";
     currentImage.value = null;
