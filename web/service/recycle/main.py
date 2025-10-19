@@ -26,8 +26,8 @@ def reprojection_point(
     tvec: np.ndarray,
 ) -> List[Tuple[float, float]]:
     projected_points, _ = cv2.projectPoints(pos3d, rvec, tvec, K, dist_coeffs)
-    projected_points = projected_points.squeeze()
-    return [(p[0][0], p[0][1]) for p in projected_points]
+    projected_points = projected_points[0]
+    return [(float(fp[0]), float(fp[1])) for fp in projected_points]
 
 
 # EPNP算法计算相机位置 - 多次计算并选择重投影误差最小的解

@@ -219,14 +219,14 @@ def pixel_to_ray(pixel_x, pixel_y, K, R, ray_origin):
 def compute_optimization_factors(control_points, K, R, ray_origin):
     optimization_factors = []
     for cp in control_points:
-        true_geo = np.array(cp.pos3d, dtype=np.float64)
-        ideal_direction = true_geo - ray_origin
+        true_geo = np.array(cp["pos3d"], dtype=np.float64)
+        ideal_direction = true_geo - np.array(ray_origin, dtype=np.float64)
         print(f"【DEBUG】归一化前的理想UTM射线方向: {ideal_direction}")
         norm_ideal = np.linalg.norm(ideal_direction)
         if norm_ideal == 0:
             continue
         ideal_direction /= norm_ideal
-        _, computed_ray = pixel_to_ray(cp.pixel[0], cp.pixel[1], K, R, ray_origin)
+        _, computed_ray = pixel_to_ray(cp["pixel"][0], cp["pixel"][1], K, R, ray_origin)
         computed_ray /= np.linalg.norm(computed_ray)
         optimization_factor_x = ideal_direction[0] / computed_ray[0]
         optimization_factor_y = ideal_direction[1] / computed_ray[1]
@@ -289,8 +289,18 @@ def ray_intersect_dem(
         current_easting = current_pos[0]
         current_northing = current_pos[1]
         lon, lat = geo_transformer.utm_to_wgs84(current_easting, current_northing)
+
+        # 添加坐标边界检查，避免在DEM数据范围外进行插值
+        if not (
+            dem_data.x_range[0] <= lon <= dem_data.x_range[1]
+            and dem_data.y_range[0] <= lat <= dem_data.y_range[1]
+        ):
+            print(f"【警告】坐标超出DEM范围: 经度={lon}, 纬度={lat}")
+            return None, step_count
+
         try:
-            dem_elev = dem_data["interpolator"]((lat, lon))
+            # 修复：使用点号访问属性而不是字典下标
+            dem_elev = dem_data.interpolator((lat, lon))
         except Exception as e:
             print(f"【错误】插值时出错: {e}")
             return None, step_count

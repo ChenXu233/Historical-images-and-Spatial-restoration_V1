@@ -236,7 +236,10 @@ async function saveAnnotations() {
     };
 
     // 发送到后端保存
-    const response = await post("/api/upload_features", featuresData);
+    const response = await post<{ message: string }>(
+      "/api/upload_features",
+      featuresData
+    );
 
     showErrorMessage(`${response.data.message}`, `保存成功`, "info");
   } catch (error) {

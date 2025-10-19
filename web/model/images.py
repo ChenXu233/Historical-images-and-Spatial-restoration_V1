@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, Tuple as DBTuple, Float as DBFloat
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from typing import TYPE_CHECKING
@@ -22,6 +22,6 @@ class Images(Base):
     )
 
     features: Mapped[list["Feature"]] = relationship("Feature", back_populates="image")
-    calculated_camera_locations: Mapped[Optional[Tuple[float, float, float]]] = (
-        mapped_column(String)
+    calculated_camera_locations: Mapped[Optional[str]] = mapped_column(
+        String, index=True
     )

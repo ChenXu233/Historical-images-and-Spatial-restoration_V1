@@ -235,33 +235,26 @@ const handleCustomMouseDown = async (
 
   try {
     // 调用API将像素坐标转换为地理坐标
-    const response = await get<any>(
+    // 转换参数格式为后端期望的元组格式 [x, y]
+    console.log(coordinates);
+    const pixels = [coordinates.x, coordinates.y];
+    const response = await post<any>(
       `/api/calculate_pixel_to_geo/${currentImage.value.id}`,
-      {
-        params: { pixels: [coordinates.x, coordinates.y] },
-      }
+      pixels
     );
 
-    if (response.status === "success") {
-      const geoPoint = response.geo;
+    if (response.status === 200) {
+      const geoPoint = response.data.geo;
       geoResult.value = {
-        longitude: geoPoint.longitude.toString(),
-        latitude: geoPoint.latitude.toString(),
+        longitude: geoPoint[0].toString(),
+        latitude: geoPoint[1].toString(),
       };
 
-      // 创建新点显示在画布上
-      const newPoint: Point = {
-        id: points.value.length + 1, // 临时ID
-        pixel_x: coordinates.x,
-        pixel_y: coordinates.y,
-        name: `像素点(${coordinates.x}, ${coordinates.y})`,
-        longitude: geoPoint.longitude.toString(),
-        latitude: geoPoint.latitude.toString(),
-        image_id: currentImage.value.id,
-        building_point_id: -1, // 表示这不是一个建筑点
-      };
-
-      points.value = [newPoint]; // 只显示当前点
+      showErrorMessage(
+        `坐标转换成功:经度 ${geoResult.value.longitude}, 纬度 ${geoResult.value.latitude}`,
+        "操作成功",
+        "info"
+      );
     } else {
       showErrorMessage("坐标转换失败", "操作失败");
     }
@@ -285,8 +278,8 @@ const calculateGeoToPixel = async () => {
     const longitude = parseFloat(geoLongitude.value);
     const latitude = parseFloat(geoLatitude.value);
 
-    // 假设第三个坐标是海拔高度，这里使用固定值
-    const pointsPosition = [[longitude, latitude, 0]];
+    // 修改为后端期望的格式：包含longitude和latitude字段的对象数组
+    const pointsPosition = [{ longitude, latitude }];
 
     const response = await post(
       `/api/calculate_geo_to_pixel/${currentImage.value.id}`,
@@ -294,11 +287,12 @@ const calculateGeoToPixel = async () => {
     );
 
     if (
-      response.status === "success" &&
-      response.pixel &&
-      response.pixel.length > 0
+      response.data &&
+      response.data.status === "success" &&
+      response.data.pixel &&
+      response.data.pixel.length > 0
     ) {
-      const pixel = response.pixel[0];
+      const pixel = response.data.pixel[0];
       pixelResult.value = {
         x: Math.round(pixel[0]),
         y: Math.round(pixel[1]),
@@ -324,7 +318,7 @@ const calculateGeoToPixel = async () => {
     }
   } catch (error) {
     console.error("地理转像素坐标失败:", error);
-    showErrorMessage("地理转像素坐标失败，请稍后重试", "操作失败");
+    showErrorMessage(`地理转像素坐标失败，请稍后重试，${error}`, "操作失败");
   }
 };
 </script>
