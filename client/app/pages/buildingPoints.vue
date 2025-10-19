@@ -12,7 +12,7 @@
         <el-col :span="12">
           <el-card title="添加单个建筑点">
             <el-form
-              ref="singlePointForm"
+              ref="singlePointFormRef"
               :model="singlePointForm"
               label-width="120px"
             >
@@ -165,7 +165,11 @@
       width="50%"
       :before-close="handleEditDialogClose"
     >
-      <el-form ref="editPointForm" :model="editPointForm" label-width="120px">
+      <el-form
+        ref="editPointFormRef"
+        :model="editPointForm"
+        label-width="120px"
+      >
         <el-form-item label="建筑点名称" prop="name">
           <el-input
             v-model="editPointForm.name"
@@ -237,6 +241,8 @@ const singlePointForm = reactive<{
   latitude: 0,
   longitude: 0,
 });
+// 单个上传表单ref
+const singlePointFormRef = ref<any>(null);
 // 地图弹窗相关
 const mapDialogVisible = ref(false);
 const selectedPoint = ref<BuildingPoint | null>(null);
@@ -253,6 +259,8 @@ const editPointForm = reactive<{
   latitude: 0,
   longitude: 0,
 });
+// 编辑表单ref
+const editPointFormRef = ref<any>(null);
 // 批量上传相关
 const selectedFile = ref<UploadFile | null>(null);
 const batchUploadRef = ref<any>(null);
@@ -401,6 +409,7 @@ const handleViewOnMap = (point: BuildingPoint) => {
 
 // 处理地图弹窗关闭
 const handleMapDialogClose = () => {
+  cleanupMap();
   mapDialogVisible.value = false;
 };
 
@@ -470,88 +479,113 @@ const handleDelete = async (pointId: number) => {
   }
 };
 
-// 初始化地图
-const initMap = () => {
-  // 这里可以根据项目需要集成地图API，例如百度地图、高德地图等
-  // 简单的地图模拟实现
+// 动态加载百度地图API
+const loadBaiduMapScript = () => {
+  return new Promise((resolve, reject) => {
+    // 检查百度地图API是否已经加载
+    if (window.BMap) {
+      resolve(window.BMap);
+      return;
+    }
+
+    const script = document.createElement("script");
+    // 这里使用百度地图JavaScript API，ak需要替换为您自己的密钥
+    const ak = "wsx3dbRA6G4Z6HAFygSWIfa282la6tlD"; // 注意：实际使用时需要替换为有效的API密钥
+    script.src = `https://api.map.baidu.com/api?v=3.0&ak=${ak}&callback=initBaiduMap`;
+    script.onerror = reject;
+    document.head.appendChild(script);
+
+    // 设置全局回调函数
+    (window as any).initBaiduMap = () => {
+      resolve(window.BMap);
+    };
+  });
+};
+
+// 初始化地图 - 使用百度地图API
+const initMap = async () => {
   const mapElement = document.getElementById("map");
   if (mapElement && selectedPoint.value) {
-    // 清空地图内容
-    mapElement.innerHTML = "";
+    try {
+      // 清空地图内容
+      mapElement.innerHTML = "";
 
-    // 创建一个简单的地图模拟
-    const mapWidth = mapElement.clientWidth;
-    const mapHeight = mapElement.clientHeight;
+      // 加载百度地图API
+      await loadBaiduMapScript();
 
-    // 绘制简单的地图背景
-    const mapBackground = document.createElement("div");
-    mapBackground.style.width = "100%";
-    mapBackground.style.height = "100%";
-    mapBackground.style.backgroundColor = "#e6f7ff";
-    mapBackground.style.border = "1px solid #91d5ff";
-    mapBackground.style.position = "relative";
-    mapBackground.style.borderRadius = "4px";
+      // 创建地图实例
+      const map = new (window as any).BMap.Map("map");
 
-    // 绘制网格线
-    for (let i = 0; i <= 10; i++) {
-      const horizontalLine = document.createElement("div");
-      horizontalLine.style.position = "absolute";
-      horizontalLine.style.height = "1px";
-      horizontalLine.style.width = "100%";
-      horizontalLine.style.top = `${i * 10}%`;
-      horizontalLine.style.backgroundColor = "rgba(145, 213, 255, 0.3)";
-      mapBackground.appendChild(horizontalLine);
+      // 设置地图中心点和缩放级别
+      const point = new (window as any).BMap.Point(
+        selectedPoint.value.longitude,
+        selectedPoint.value.latitude
+      );
+      map.centerAndZoom(point, 15); // 15级缩放
+
+      // 添加地图类型控件（包括卫星地图）
+      map.addControl(
+        new (window as any).BMap.MapTypeControl({
+          mapTypes: [
+            (window as any).BMAP_NORMAL_MAP,
+            (window as any).BMAP_SATELLITE_MAP,
+            (window as any).BMAP_HYBRID_MAP,
+          ],
+        })
+      );
+
+      // 启用滚轮缩放
+      map.enableScrollWheelZoom(true);
+
+      // 添加标记点
+      const marker = new (window as any).BMap.Marker(point);
+      map.addOverlay(marker);
+
+      // 添加信息窗口
+      const infoWindow = new (window as any).BMap.InfoWindow(
+        `<div style="margin:10px;"><p>名称: ${selectedPoint.value.name}</p><p>纬度: ${selectedPoint.value.latitude}</p><p>经度: ${selectedPoint.value.longitude}</p></div>`
+      );
+
+      // 点击标记点显示信息窗口
+      marker.addEventListener("click", () => {
+        map.openInfoWindow(infoWindow, point);
+      });
+
+      // 自动打开信息窗口
+      map.openInfoWindow(infoWindow, point);
+
+      // 设置地图容器尺寸
+      const resizeMap = () => {
+        mapElement.style.width = "100%";
+        mapElement.style.height = "100%";
+        // map.resetSize();
+      };
+
+      resizeMap();
+      window.addEventListener("resize", resizeMap);
+
+      // 清理函数
+      const cleanup = () => {
+        window.removeEventListener("resize", resizeMap);
+      };
+
+      // 存储清理函数，供关闭弹窗时调用
+      (mapElement as any).__mapCleanup = cleanup;
+    } catch (error) {
+      console.error("地图初始化失败:", error);
+      // 显示错误信息
+      mapElement.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#f56c6c;">地图加载失败，请刷新页面重试</div>';
     }
+  }
+};
 
-    for (let i = 0; i <= 10; i++) {
-      const verticalLine = document.createElement("div");
-      verticalLine.style.position = "absolute";
-      verticalLine.style.width = "1px";
-      verticalLine.style.height = "100%";
-      verticalLine.style.left = `${i * 10}%`;
-      verticalLine.style.backgroundColor = "rgba(145, 213, 255, 0.3)";
-      mapBackground.appendChild(verticalLine);
-    }
-
-    // 计算点的位置（这里是简单的模拟计算）
-    // 实际项目中应该使用地图API的坐标转换函数
-    const centerLat = 30.0;
-    const centerLng = 120.0;
-    const scale = 100; // 缩放比例
-
-    const x =
-      (selectedPoint.value.longitude - centerLng) * scale + mapWidth / 2;
-    const y =
-      mapHeight / 2 - (selectedPoint.value.latitude - centerLat) * scale;
-
-    // 创建标记点
-    const marker = document.createElement("div");
-    marker.style.position = "absolute";
-    marker.style.width = "20px";
-    marker.style.height = "20px";
-    marker.style.backgroundColor = "#ff4d4f";
-    marker.style.borderRadius = "50%";
-    marker.style.left = `${Math.max(0, Math.min(x - 10, mapWidth - 20))}px`;
-    marker.style.top = `${Math.max(0, Math.min(y - 10, mapHeight - 20))}px`;
-    marker.style.cursor = "pointer";
-    marker.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.15)";
-
-    // 创建标记点的文字标签
-    const label = document.createElement("div");
-    label.style.position = "absolute";
-    label.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
-    label.style.color = "white";
-    label.style.padding = "2px 6px";
-    label.style.borderRadius = "4px";
-    label.style.fontSize = "12px";
-    label.style.whiteSpace = "nowrap";
-    label.style.left = "25px";
-    label.style.top = "-5px";
-    label.textContent = selectedPoint.value.name;
-    marker.appendChild(label);
-
-    mapBackground.appendChild(marker);
-    mapElement.appendChild(mapBackground);
+// 清理地图资源
+const cleanupMap = () => {
+  const mapElement = document.getElementById("map");
+  if (mapElement && (mapElement as any).__mapCleanup) {
+    (mapElement as any).__mapCleanup();
+    delete (mapElement as any).__mapCleanup;
   }
 };
 
@@ -564,6 +598,9 @@ watch(
       setTimeout(() => {
         initMap();
       }, 100);
+    } else {
+      // 弹窗关闭时清理地图资源
+      cleanupMap();
     }
   }
 );
