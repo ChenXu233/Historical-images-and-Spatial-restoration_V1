@@ -15,7 +15,7 @@
       <el-menu-item index="/imageUpload">
         <span>图片上传</span>
       </el-menu-item>
-      <el-menu-item index="/buildsPoint">
+      <el-menu-item index="/buildingPoints">
         <span>建筑点地理坐标管理</span>
       </el-menu-item>
       <el-menu-item index="/labelling">

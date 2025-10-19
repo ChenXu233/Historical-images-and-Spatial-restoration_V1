@@ -436,3 +436,98 @@ async def delete_image(image_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"删除图片时发生错误: {str(e)}")
+
+
+@api.put("/building_points/{point_id}")
+async def update_building_point(
+    point_id: int, building_point: BuildingPoint, db: Session = Depends(get_db)
+):
+    """
+    更新建筑点信息
+    """
+    try:
+        # 检查建筑点是否存在
+        existing_point = (
+            db.query(BuildingPointModels)
+            .filter(BuildingPointModels.id == point_id)
+            .first()
+        )
+        if not existing_point:
+            raise HTTPException(status_code=404, detail="建筑点不存在")
+
+        # 检查是否已存在具有相同名称、经纬度的建筑点
+        duplicate_point = (
+            db.query(BuildingPointModels)
+            .filter(
+                and_(
+                    BuildingPointModels.name == building_point.name,
+                    BuildingPointModels.longitude == building_point.longitude,
+                    BuildingPointModels.latitude == building_point.latitude,
+                    BuildingPointModels.id != point_id,
+                )
+            )
+            .first()
+        )
+
+        if duplicate_point:
+            raise HTTPException(
+                status_code=400, detail="已存在具有相同名称和坐标的建筑点"
+            )
+
+        # 更新建筑点信息
+        existing_point.name = building_point.name
+        existing_point.latitude = building_point.latitude
+        existing_point.longitude = building_point.longitude
+
+        db.commit()
+        db.refresh(existing_point)
+
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "建筑点更新成功",
+                "data": {
+                    "id": existing_point.id,
+                    "name": existing_point.name,
+                    "latitude": existing_point.latitude,
+                    "longitude": existing_point.longitude,
+                },
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"更新建筑点时发生错误: {str(e)}")
+
+
+@api.delete("/building_points/{point_id}")
+async def delete_building_point(point_id: int, db: Session = Depends(get_db)):
+    """
+    删除建筑点及其相关特征点
+    """
+    try:
+        # 检查建筑点是否存在
+        existing_point = (
+            db.query(BuildingPointModels)
+            .filter(BuildingPointModels.id == point_id)
+            .first()
+        )
+        if not existing_point:
+            raise HTTPException(status_code=404, detail="建筑点不存在")
+
+        # 删除与该建筑点相关的所有特征点
+        db.query(FeatureModel).filter(
+            FeatureModel.building_point_id == point_id
+        ).delete()
+
+        # 删除建筑点
+        db.delete(existing_point)
+        db.commit()
+
+        return JSONResponse(content={"status": "success", "message": "建筑点删除成功"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"删除建筑点时发生错误: {str(e)}")
