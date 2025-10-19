@@ -37,6 +37,10 @@ const props = defineProps<{
   image: Image | null;
   points: Point[];
   showCoordinates?: boolean;
+  customMouseDownHandler?: (
+    event: MouseEvent,
+    coordinates: { x: number; y: number }
+  ) => boolean;
 }>();
 
 // Emits
@@ -348,21 +352,18 @@ function handleMouseDown(event: MouseEvent) {
   }
 
   if (event.button === 0) {
-    // 左键添加点
+    // 左键点击
     const { x, y } = calculateImageCoordinates(event);
 
-    // 创建新点并触发事件
-    const newPoint: Point = {
-      id: props.points.length + 1, // 服务器会生成ID
-      pixel_x: x,
-      pixel_y: y,
-      name: `Point`,
-      longitude: "",
-      latitude: "",
-      image_id: props.image?.id || 0,
-    };
-
-    emit("pointAdded", newPoint);
+    // 如果提供了自定义处理函数，优先使用它
+    if (props.customMouseDownHandler) {
+      const shouldContinue = props.customMouseDownHandler(event, { x, y });
+      // 如果自定义处理函数返回false，则不执行默认行为
+      if (shouldContinue === false) {
+        return;
+      }
+    }
+    drawCanvas(loadedImage.value, props.points);
   }
 }
 
@@ -455,7 +456,7 @@ function handleResize() {
 watch(
   () => props.image,
   (newImage) => {
-    if (newImage && isCanvasInitialized.value) {
+    if (newImage) {
       loadImageAndFeatures(newImage);
     }
   }
@@ -465,7 +466,7 @@ watch(
 watch(
   () => props.points,
   () => {
-    if (loadedImage.value && isCanvasInitialized.value) {
+    if (loadedImage.value) {
       drawCanvas(loadedImage.value, props.points);
     }
   }

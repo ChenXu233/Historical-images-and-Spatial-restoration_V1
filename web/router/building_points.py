@@ -1,4 +1,3 @@
-from re import A
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.requests import Request
 from sqlalchemy.orm import Session
@@ -10,16 +9,18 @@ from model.building_point import BuildingPoint as BuildingPointModels
 from model.feature import Feature as FeatureModel
 from schema.building_point import BuildingPoint
 from database import get_db
-from .api import api
+from pydantic import BaseModel
+
+api = APIRouter(prefix="/api", tags=["building_points"])
 
 
-class BuildingPointData:
+class BuildingPointData(BaseModel):
     name: str
     longitude: float
     latitude: float
 
 
-class BuildingPointsUpload:
+class BuildingPointsUpload(BaseModel):
     points: List[BuildingPointData]
 
 

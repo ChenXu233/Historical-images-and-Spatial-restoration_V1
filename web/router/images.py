@@ -8,7 +8,8 @@ import uuid
 from model.images import Images as ImagesModel
 from model.feature import Feature as FeatureModel
 from database import get_db
-from .api import api
+
+api = APIRouter(prefix="/api", tags=["images"])
 
 # 创建上传目录
 UPLOAD_DIR = Path(__file__).parent.parent / "static" / "uploaded_images"

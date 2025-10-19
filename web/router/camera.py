@@ -11,7 +11,8 @@ from service.recycle.utils import (
     load_features_from_orm,
     load_points_data_from_orm,
 )
-from .api import api
+
+api = APIRouter(prefix="/api", tags=["camera"])
 
 
 @api.post("/calculate_camera_position")

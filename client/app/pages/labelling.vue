@@ -5,7 +5,7 @@
         :image="currentImage"
         :show-coordinates="true"
         :points="points"
-        @pointAdded="handlePointAdded"
+        :custom-mouse-down-handler="handleCustomMouseDown"
         @pointsLoaded="handlePointsLoaded"
       />
     </div>
@@ -34,11 +34,34 @@
         <div class="status-text">{{ imageStatusText }}</div>
       </div>
 
-      <CoordinateInput
-        v-model:pointName="pointName"
-        v-model:longitude="longitude"
-        v-model:latitude="latitude"
-      />
+      <!-- 建筑点选择器 -->
+      <div class="image-selector-container">
+        <label class="input-label">选择建筑点</label>
+        <el-select
+          v-model="selectedBuildingPoint"
+          placeholder="请选择建筑点"
+          class="w-full"
+          :loading="isLoadingBuildingPoints"
+          filterable
+          clearable
+        >
+          <el-option
+            v-for="buildingPoint in buildingPoints"
+            :key="buildingPoint.id"
+            :label="buildingPoint.name"
+            :value="buildingPoint"
+          >
+            {{ buildingPoint.name }} ({{ buildingPoint.latitude }},
+            {{ buildingPoint.longitude }})
+          </el-option>
+        </el-select>
+        <div class="status-text" v-if="selectedBuildingPoint">
+          已选择建筑点: {{ selectedBuildingPoint.name }}
+          <span style="color: green; font-size: 12px; margin-left: 10px">
+            ✓ 点击图片添加该建筑点
+          </span>
+        </div>
+      </div>
 
       <button class="input-field" @click="async () => await saveAnnotations()">
         保存标注
@@ -53,10 +76,16 @@ import { ref, onMounted } from "vue";
 import { showErrorMessage, get, post } from "../utils/request";
 import type { Point, Image } from "../utils/types";
 
-// 导入组件
-import CoordinateInput from "../components/CoordinateInput.vue";
 import PointList from "../components/PointList.vue";
 import CanvasViewer from "../components/CanvasViewer.vue";
+
+// 定义建筑点类型
+interface BuildingPoint {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+}
 
 // 状态管理
 const points = ref<Point[]>([]);
@@ -67,15 +96,30 @@ const imageStatusText = ref("未选择照片");
 const currentImageName = ref("");
 const canvasContainerWrapper = ref<HTMLDivElement | null>(null);
 
-// 表单输入
-const pointName = ref("");
-const longitude = ref("");
-const latitude = ref("");
+// 建筑点相关状态
+const buildingPoints = ref<BuildingPoint[]>([]);
+const selectedBuildingPoint = ref<BuildingPoint | null>(null);
+const isLoadingBuildingPoints = ref(false);
+// 获取建筑点列表
+const fetchBuildingPoints = async () => {
+  try {
+    isLoadingBuildingPoints.value = true;
+    const response = await get<BuildingPoint[]>("/api/building_points");
+    buildingPoints.value = response.data;
+  } catch (error) {
+    console.error("获取建筑点列表失败:", error);
+    showErrorMessage("获取建筑点列表失败，请稍后重试", "加载失败");
+  } finally {
+    isLoadingBuildingPoints.value = false;
+  }
+};
 
-// 页面加载完成后立即尝试获取图片列表
+// 页面加载完成后立即尝试获取图片列表和建筑点列表
 onMounted(async () => {
   // 获取图片列表
   await refreshImages();
+  // 获取建筑点列表
+  await fetchBuildingPoints();
 });
 
 // 刷新图片列表
@@ -149,25 +193,45 @@ function handlePointsLoaded(newPoints: Point[]) {
   points.value = newPoints;
 }
 
-// 处理添加新点事件
-function handlePointAdded(newPoint: Point) {
-  const name = pointName.value || `Point ${points.value.length + 1}`;
+// 自定义鼠标点击处理函数
+const handleCustomMouseDown = (
+  event: MouseEvent,
+  coordinates: { x: number; y: number }
+) => {
+  // 如果有选中的建筑点，则使用建筑点信息创建新点
+  if (selectedBuildingPoint.value) {
+    if (!currentImage.value) {
+      showErrorMessage("请先选择历史照片", "操作失败");
+      return false;
+    }
+    const newPoint: Point = {
+      id: points.value.length + 1, // 服务器会生成ID
+      pixel_x: coordinates.x,
+      pixel_y: coordinates.y,
+      name: selectedBuildingPoint.value.name,
+      longitude: selectedBuildingPoint.value.longitude.toString(),
+      latitude: selectedBuildingPoint.value.latitude.toString(),
+      image_id: currentImage.value.id || 0,
+    };
 
-  // 创建新点，合并表单输入的坐标信息
-  const pointToAdd: Point = {
-    ...newPoint,
-    name,
-    longitude: longitude.value,
-    latitude: latitude.value,
-  };
+    // 检查点是否重复
+    const isDuplicate = points.value.some(
+      (point) =>
+        Math.abs(point.pixel_x - coordinates.x) <= 5 &&
+        Math.abs(point.pixel_y - coordinates.y) <= 5
+    );
 
-  points.value.push(pointToAdd);
+    if (!isDuplicate) {
+      points.value.push(newPoint);
+      // 为了确保Vue能检测到数组变化，创建一个新的数组引用
+      points.value = [...points.value];
+    } else {
+      showErrorMessage("该位置已有点，无法重复添加", "添加失败");
+    }
+  }
 
-  // 清空输入框
-  pointName.value = "";
-  longitude.value = "";
-  latitude.value = "";
-}
+  return false;
+};
 
 // 删除点
 function removePoint(index: number) {
@@ -187,10 +251,10 @@ async function saveAnnotations() {
       features: points.value.map((point) => ({
         x: point.pixel_x,
         y: point.pixel_y,
-        image_id: currentImageName.value,
+        image_id: currentImage.value!.id,
         name: point.name,
-        longitude: point.longitude ? parseFloat(point.longitude) : undefined,
-        latitude: point.latitude ? parseFloat(point.latitude) : undefined,
+        longitude: point.longitude,
+        latitude: point.latitude,
       })),
     };
 
