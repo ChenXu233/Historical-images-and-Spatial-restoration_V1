@@ -22,6 +22,7 @@ dependencies = [
     "sqlalchemy>=2.0.42",
     "Jinja2>=3.1.6",
     "python-multipart>=0.0.20",
+    "alembic>=1.17.0",
 ]
 requires-python = ">=3.10, <3.14"
 readme = "README.md"
