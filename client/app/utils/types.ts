@@ -7,6 +7,7 @@ interface Point {
   longitude?: string;
   latitude?: string;
   image_id: number;
+  building_point_id: number;
 }
 
 interface Image {

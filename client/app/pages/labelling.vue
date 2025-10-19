@@ -211,7 +211,8 @@ const handleCustomMouseDown = (
       name: selectedBuildingPoint.value.name,
       longitude: selectedBuildingPoint.value.longitude.toString(),
       latitude: selectedBuildingPoint.value.latitude.toString(),
-      image_id: currentImage.value.id || 0,
+      image_id: currentImage.value.id,
+      building_point_id: selectedBuildingPoint.value.id,
     };
 
     // 检查点是否重复
@@ -236,6 +237,7 @@ const handleCustomMouseDown = (
 // 删除点
 function removePoint(index: number) {
   points.value.splice(index, 1);
+  points.value = [...points.value];
 }
 
 // 保存标注信息
@@ -252,7 +254,7 @@ async function saveAnnotations() {
         x: point.pixel_x,
         y: point.pixel_y,
         image_id: currentImage.value!.id,
-        name: point.name,
+        building_point_id: point.building_point_id,
         longitude: point.longitude,
         latitude: point.latitude,
       })),

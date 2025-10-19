@@ -74,8 +74,6 @@ async def get_image_features(image_id: int, db: Session = Depends(get_db)):
             }
             for f in features
         ]
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

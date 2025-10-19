@@ -38,7 +38,7 @@ async def upload_features(
                 pixel_x=feature.x,
                 pixel_y=feature.y,
                 image_id=image.id,
-                building_point_id=feature.name,
+                building_point_id=feature.building_point_id,
             )
             db.add(feature_model)
         db.commit()
