@@ -15,14 +15,14 @@
       <el-menu-item index="/imageUpload">
         <span>图片上传</span>
       </el-menu-item>
-      <el-menu-item index="/labelling">
-        <span>标注</span>
-      </el-menu-item>
       <el-menu-item index="/buildsPoint">
-        <span>建筑点</span>
+        <span>建筑点地理坐标管理</span>
+      </el-menu-item>
+      <el-menu-item index="/labelling">
+        <span>图片标注</span>
       </el-menu-item>
       <el-menu-item index="/coordinateTransformation">
-        <span>坐标转换</span>
+        <span>图像与地理坐标转换</span>
       </el-menu-item>
     </el-menu>
   </el-header>

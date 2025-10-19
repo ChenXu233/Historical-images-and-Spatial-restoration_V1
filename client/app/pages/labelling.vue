@@ -113,10 +113,35 @@ function queryImages(query: string, callback: (data: any[]) => void) {
 }
 
 // 通过Autocomplete选择图片处理
-async function handleImageSelectByAutocomplete(item: Image) {
-  currentImage.value = item;
-  currentImageName.value = item.name;
-  imageStatusText.value = item.name;
+async function handleImageSelectByAutocomplete(item: Record<string, any>) {
+  // Element Plus may pass a plain object or the suggestion value (or even a string),
+  // so be flexible: try to resolve to an Image either by direct cast or by looking up by name.
+  let selected: Image | null = null;
+
+  if (typeof item === "string") {
+    // If a plain string was passed, try to find the image by name
+    selected = allImages.value.find((img) => img.name === item) ?? null;
+  } else if (item && typeof item === "object") {
+    // If the suggestion object includes a name or value, prefer that to lookup in allImages
+    const name = item.name ?? item.value ?? null;
+    if (name) {
+      selected =
+        allImages.value.find((img) => img.name === name) ?? (item as Image);
+    } else {
+      selected = item as Image;
+    }
+  }
+
+  if (!selected) {
+    imageStatusText.value = "未选择照片";
+    currentImage.value = null;
+    currentImageName.value = "";
+    return;
+  }
+
+  currentImage.value = selected;
+  currentImageName.value = selected.name;
+  imageStatusText.value = selected.name;
 }
 
 // 处理特征点加载完成事件

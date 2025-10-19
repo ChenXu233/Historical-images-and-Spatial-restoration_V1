@@ -293,18 +293,10 @@ async function loadImageAndFeatures(imageItem: Image) {
 
     // 加载特征点数据
     try {
-      const response = await get(`/api/images/${imageItem.id}/features`);
-      const features = response.data;
-
-      // 将后端返回的特征点转换为前端的Point格式
-      const points: Point[] = features.map((feature: any) => ({
-        id: feature.id,
-        pixel_x: feature.pixel_x,
-        pixel_y: feature.pixel_y,
-        name: feature.name,
-        longitude: feature.longitude?.toString() || "",
-        latitude: feature.latitude?.toString() || "",
-      }));
+      const response = await get<Point[]>(
+        `/api/images/${imageItem.id}/features`
+      );
+      const points = response.data;
 
       // 触发特征点加载完成事件
       emit("pointsLoaded", points);
@@ -361,11 +353,13 @@ function handleMouseDown(event: MouseEvent) {
 
     // 创建新点并触发事件
     const newPoint: Point = {
+      id: props.points.length + 1, // 服务器会生成ID
       pixel_x: x,
       pixel_y: y,
       name: `Point`,
       longitude: "",
       latitude: "",
+      image_id: props.image?.id || 0,
     };
 
     emit("pointAdded", newPoint);

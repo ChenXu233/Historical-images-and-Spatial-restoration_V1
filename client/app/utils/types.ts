@@ -6,6 +6,7 @@ interface Point {
   name: string;
   longitude?: string;
   latitude?: string;
+  image_id: number;
 }
 
 interface Image {
@@ -14,4 +15,5 @@ interface Image {
   path: string;
 }
 
-export type { Point, Image };
+
+export type { Point, Image};

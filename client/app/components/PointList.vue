@@ -2,7 +2,8 @@
   <div class="point-list">
     <div v-for="(point, index) in points" :key="index" class="point-item">
       <div>
-        {{ point.name }} ({{ point.x }}, {{ point.y }})<br />
+        {{ index + 1 }} - {{ point.name }} ({{ point.pixel_x.toFixed(0) }},
+        {{ point.pixel_y.toFixed(0) }})<br />
         <template v-if="point.longitude">
           经度: {{ point.longitude }}°
         </template>

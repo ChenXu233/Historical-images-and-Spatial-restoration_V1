@@ -396,3 +396,43 @@ async def calculate_camera_position(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"计算相机位置时发生错误: {str(e)}")
+
+
+@api.delete("/images/{image_id}")
+async def delete_image(image_id: int, db: Session = Depends(get_db)):
+    """
+    删除图片及其相关数据
+    """
+    try:
+        # 获取图片信息
+        image = db.query(ImagesModel).filter(ImagesModel.id == image_id).first()
+        if not image:
+            raise HTTPException(status_code=404, detail="图片未找到")
+
+        # 删除图片相关的特征点
+        db.query(FeatureModel).filter(FeatureModel.image_id == image_id).delete()
+
+        # 删除图片文件
+        file_path = (
+            Path(__file__).parent.parent
+            / "static"
+            / "uploaded_images"
+            / Path(image.path).name
+        )
+        if file_path.exists():
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                # 文件删除失败，记录日志但继续执行
+                print(f"删除图片文件时出错: {str(e)}")
+
+        # 从数据库中删除图片记录
+        db.delete(image)
+        db.commit()
+
+        return JSONResponse(content={"message": "图片删除成功"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"删除图片时发生错误: {str(e)}")
