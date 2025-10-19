@@ -159,11 +159,7 @@ async def upload_features(
                 return JSONResponse(
                     content={
                         "status": "success",
-                        "message": f"""特征点上传成功且相机位置计算完成，最优解：
-焦距：{focal_length} mm，
-传感器尺寸：{sensor_size[0]} x {sensor_size[1]} mm，
-重投影误差：{reprojection_error} px
-相机原点：{camera_position}
+                        "message": f"""特征点上传成功且相机位置计算完成，相机参数如下：焦距：{focal_length} mm，传感器尺寸：{sensor_size[0]} x {sensor_size[1]} mm，重投影误差：{reprojection_error} px,相机原点：{camera_position}
 """,
                     }
                 )

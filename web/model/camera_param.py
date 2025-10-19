@@ -2,7 +2,7 @@ from sqlalchemy import Integer, ForeignKey, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from typing import TYPE_CHECKING
-from typing import Optional
+
 
 if TYPE_CHECKING:
     from model.images import Images

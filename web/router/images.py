@@ -71,6 +71,7 @@ async def get_image_features(image_id: int, db: Session = Depends(get_db)):
                 "pixel_y": f.pixel_y,
                 "longitude": f.building_point.longitude,
                 "latitude": f.building_point.latitude,
+                "building_point_id": f.building_point_id,
             }
             for f in features
         ]

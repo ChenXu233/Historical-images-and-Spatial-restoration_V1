@@ -236,9 +236,9 @@ async function saveAnnotations() {
     };
 
     // 发送到后端保存
-    await post("/api/upload_features", featuresData);
+    const response = await post("/api/upload_features", featuresData);
 
-    showErrorMessage("标注信息已保存", "保存成功", "info");
+    showErrorMessage(`${response.data.message}`, `保存成功`, "info");
   } catch (error) {
     showErrorMessage("保存标注信息失败，请稍后重试", "保存失败");
     console.error("保存标注错误:", error);

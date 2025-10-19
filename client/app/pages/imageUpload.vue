@@ -19,7 +19,7 @@
           :on-error="handleUploadError"
           multiple
           :file-list="uploadFileList"
-          :headers="uploadHeaders"
+          :name="'image'"
         >
           <i class="el-icon-upload"></i>
           <div class="el-upload__text">拖拽文件到此处，或<em>点击上传</em></div>
@@ -148,7 +148,6 @@ import { config } from "../config/config";
 
 // 上传相关配置
 const uploadUrl = `${config.apiBaseUrl}/api/upload_image`;
-const uploadHeaders = { "Content-Type": "multipart/form-data" };
 const uploadFileList = ref<any[]>([]);
 
 // 图片列表相关状态
